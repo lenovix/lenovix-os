@@ -1,0 +1,37 @@
+>>> Checklist Pencapaian (Yang Sudah Dibuat):
+[x] Setup Environment & Toolchain: Integrasi lingkungan pengembangan menggunakan WSL, GCC Cross-Compiler, NASM, dan otomasi Makefile di Windows.
+[x] Bootloader Dasar: Inisialisasi awal hardware menggunakan standar Multiboot ASM yang kompatibel dengan emulator.
+[x] VGA Text Mode Driver: Pembuatan modul untuk membersihkan layar (clear_screen) dan mencetak teks multi-warna langsung ke memori video (0xB8000).
+[x] Mekanisme Newline: Dukungan karakter khusus \n agar teks bisa berpindah baris secara otomatis.
+[x] Sinkronisasi Kursor Hardware: Menghubungkan kursor berkedip bawaan kartu grafis lewat port I/O 0x3D4 dan 0x3D5 agar mengikuti posisi ketikan.
+[x] Keyboard Driver (Polled to Interrupt): Migrasi dari sistem polling yang boros ke arsitektur Event-Driven berbasis interupsi hardware.
+[x] IDT (Interrupt Descriptor Table) & PIC Remapping: Konfigurasi tabel interupsi CPU dan penanganan Triple Fault melalui default handler stub.
+[x] Penanganan Backspace: Logika penghapusan karakter \n dan visual spasi mundur yang presisi tanpa merusak prompt shell.
+[x] Command Shell Interpreter: Implementasi buffer string dan fungsi perbandingan kata (string_compare) untuk memproses perintah help, about, clear, dan shutdown.
+[x] Penanganan Tombol Caps Lock / Huruf Kapital
+[x] Proteksi Batas Layar Bawah (Scrolling Dasar)
+
+>>> Rencana Rilis Bertahap (Roadmap Lenovix OS):
+Versi 0.2: The Time & Memory Update (Fokus: Fondasi Internal)
+[ ] Driver PIT (Programmable Interval Timer): Mengaktifkan IRQ 0 untuk menghitung interupsi waktu nyata (membuat fungsi sleep/delay dan sistem uptime).
+[ ] GDT (Global Descriptor Table): Mengamankan segmentasi memori kernel dan proteksi akses data.
+[ ] Physical Memory Manager: Membuat pengelola alokasi memori dasar (mengamankan halaman/page memori yang kosong).
+
+Versi 0.3: Dynamic Allocation & Advanced Shell (Fokus: Fitur CLI)
+[ ] Heap Allocator (malloc & free): Membuat fungsi alokasi memori dinamis agar kernel bisa memesan memori sesuai kebutuhan runtime.
+[ ] Shell History & Buffer Scrolling: Menambahkan fitur riwayat perintah (menekan tombol panah atas untuk memanggil perintah lama) dan kemampuan layar untuk scrolling ke bawah jika teks sudah penuh.
+
+Versi 0.4: Storage & Filesystem (Fokus: Data)
+[ ] Driver IDE/ATA Harddrive: Membuat kode agar kernel bisa membaca dan menulis sektor pada harddisk virtual.
+[ ] Virtual File System (VFS) / FAT12/16: Implementasi sistem file sederhana agar Lenovix OS bisa membaca folder dan mengeksekusi file teks (.txt).
+
+Versi 0.5: User Mode & Multitasking (Fokus: Stabilitas OS)
+[ ] Multitasking/Task Switching: Kemampuan OS untuk menjalankan dua proses/looping secara bersamaan (simulasi threads).
+[ ] User Mode (Ring 3) Separation: Memisahkan memori aplikasi agar jika aplikasi crash, kernel utama OS tidak ikut mati.
+
+>>> Menuju Versi 1.0: The Graphical Era (GUI):
+[ ] Versi 0.6 (VESA Video Mode): Mengalihkan layar dari mode teks biasa ke mode piksel grafis (VBE - VESA BIOS Extensions) dengan resolusi $800 \times 600$ atau lebih tinggi. Membuat fungsi dasar draw_pixel.
+[ ] Versi 0.7 (Mouse Driver & Shapes): Membuat driver mouse port PS/2 untuk merender kursor panah dan mendeteksi koordinat klik, serta fungsi menggambar kotak/garis.
+[ ] Versi 0.8 (Font Renderer & Window Manager): Membuat sistem untuk menggambar font berbasis matriks piksel dan logika jendela (window window sederhana yang bisa digeser).
+[ ] Versi 0.9 (Desktop & Apps Environment): Membuat antarmuka desktop dasar, taskbar, dan aplikasi bawaan sederhana (seperti text editor atau kalkulator grafis).
+[ ] Versi 1.0 (Lenovix OS Official Release): Kernel yang stabil dengan CLI terintegrasi, GUI Desktop Environment yang fungsional, manajemen memori aman, dan siap di-burn ke dalam Flashdisk asli untuk dicoba langsung di laptop/PC riil (bukan emulator lagi).

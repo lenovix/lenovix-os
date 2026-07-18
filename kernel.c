@@ -39,6 +39,28 @@ void clear_screen(void) {
     update_hardware_cursor();
 }
 
+void scroll(void) {
+    // Geser baris 1-24 naik ke baris 0-23
+    for (int y = 1; y < VGA_HEIGHT; y++) {
+        for (int x = 0; x < VGA_WIDTH; x++) {
+            int target_index = ((y - 1) * VGA_WIDTH + x) * 2;
+            int source_index = (y * VGA_WIDTH + x) * 2;
+            video_memory[target_index] = video_memory[source_index];
+            video_memory[target_index + 1] = video_memory[source_index + 1];
+        }
+    }
+
+    // Kosongkan baris paling bawah (baris 24)
+    for (int x = 0; x < VGA_WIDTH; x++) {
+        int index = ((VGA_HEIGHT - 1) * VGA_WIDTH + x) * 2;
+        video_memory[index] = ' ';
+        video_memory[index + 1] = 0x07;
+    }
+
+    // Kembalikan kursor ke baris paling bawah
+    cursor_y = VGA_HEIGHT - 1;
+}
+
 void kprint_char(char c, char color) {
     if (c == '\b') {
         if (cursor_x > 2) {
@@ -65,6 +87,10 @@ void kprint_char(char c, char color) {
         cursor_x = 0;
         cursor_y++;
     }
+    if (cursor_y >= VGA_HEIGHT) {
+        scroll();
+    }
+
     update_hardware_cursor();
 }
 
@@ -119,14 +145,54 @@ unsigned char scancode_to_ascii[128] = {
     0,  'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`',   0,
   '\\', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/',   0, '*',   0, ' '
 };
+int shift_pressed = 0;
+int caps_lock_active = 0;
+unsigned char scancode_to_ascii_shift[128] = {
+    0,  27, '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', '\b',
+  '\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', '\n',
+    0,  'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"', '~',   0,
+  '|', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?',   0, '*',   0, ' '
+};
 
 // FUNGSI BARU: Dipanggil langsung oleh sistem interupsi Assembly
 void keyboard_handler_c(void) {
     unsigned char scancode = inb(0x60); // Baca data tombol dari port keyboard
 
-    // Sinyal di bawah 0x80 artinya tombol ditekan
-    if (scancode < 0x80) {
-        unsigned char ascii = scancode_to_ascii[scancode];
+    // 1. Cek jika tombol Shift ditekan (Press)
+    if (scancode == 0x2A || scancode == 0x36) {
+        shift_pressed = 1;
+    }
+    // 2. Cek jika tombol Shift dilepas (Release)
+    else if (scancode == 0xAA || scancode == 0xB6) {
+        shift_pressed = 0;
+    }
+    // 3. Cek jika tombol Caps Lock ditekan (Toggle status)
+    else if (scancode == 0x3A) {
+        caps_lock_active = !caps_lock_active; // Balikkan status (jika 1 jadi 0, jika 0 jadi 1)
+    }
+    // 4. Proses tombol alfabet dan karakter biasa
+    else if (scancode < 0x80) {
+        unsigned char ascii = 0;
+        
+        // Cek apakah scancode yang ditekan termasuk huruf alfabet (A-Z / a-z)
+        // Berdasarkan tabel, scancode huruf utama berkisar antara 0x10 (Q) sampai 0x32 (M)
+        int is_letter = (scancode >= 0x10 && scancode <= 0x19) || // Baris Q-P
+                        (scancode >= 0x1E && scancode <= 0x26) || // Baris A-L
+                        (scancode >= 0x2C && scancode <= 0x32);   // Baris Z-M
+
+        if (is_letter) {
+            // Untuk HURUF: Caps Lock dan Shift saling meniadakan jika aktif bersamaan (XOR logic)
+            if (caps_lock_active ^ shift_pressed) {
+                ascii = scancode_to_ascii_shift[scancode];
+            } else {
+                ascii = scancode_to_ascii[scancode];
+            }
+        } else {
+            // Untuk SIMBOL/ANGKA: Hanya terpengaruh oleh tombol Shift, Caps Lock diabaikan
+            ascii = shift_pressed ? scancode_to_ascii_shift[scancode] : scancode_to_ascii[scancode];
+        }
+        
+        // Cetak karakter ke layar shell
         if (ascii != 0) {
             if (ascii == '\n') {
                 process_command();
