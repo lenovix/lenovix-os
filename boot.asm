@@ -42,3 +42,16 @@ outb:
     mov al, [esp + 8] ; Ambil argumen kedua (data byte) dari stack
     out dx, al        ; Kirim data di AL ke port DX
     ret
+
+global shutdown_qemu
+shutdown_qemu:
+    ; Mengirim sinyal shutdown ke port ACPI bawaan QEMU/VirtualBox
+    mov dx, 0x604
+    mov ax, 0x2000
+    out dx, ax
+    
+    ; Jika gagal (tidak di emulator), matikan gangguan dan hentikan CPU
+    cli
+.halt:
+    hlt
+    jmp .halt

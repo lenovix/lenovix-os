@@ -10,6 +10,7 @@ int command_index = 0;
 
 extern unsigned char inb(unsigned short port);
 extern void outb(unsigned short port, unsigned char data);
+extern void shutdown_qemu(void);
 
 void update_hardware_cursor(void) {
     // Hitung posisi linear di memori VGA (0 sampai 1999)
@@ -101,6 +102,7 @@ void process_command(void) {
         kprint("  help  - Menampilkan daftar perintah ini\n", 0x0F);
         kprint("  about - Informasi mengenai sistem operasi ini\n", 0x0F);
         kprint("  clear - Membersihkan layar shell\n", 0x0F);
+        kprint("  shutdown - Mematikan sistem operasi\n", 0x0F);
     } 
     // Pilihan Perintah 2: about
     else if (string_compare(command_buffer, "about")) {
@@ -112,6 +114,15 @@ void process_command(void) {
     else if (string_compare(command_buffer, "clear")) {
         clear_screen();
     } 
+    // Pilihan Perintah 4: shutdown
+    else if (string_compare(command_buffer, "shutdown")) {
+        kprint("Mematikan Lenovix OS...", 0x0C); // Teks merah
+        
+        // Beri sedikit jeda visual sebelum mati (opsional, loop kosong)
+        for(volatile int i = 0; i < 50000000; i++); 
+        
+        shutdown_qemu();
+    }
     // Perintah tidak dikenali
     else {
         kprint("Perintah '", 0x0C);
