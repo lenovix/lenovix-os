@@ -55,3 +55,31 @@ shutdown_qemu:
 .halt:
     hlt
     jmp .halt
+
+global load_idt
+load_idt:
+    mov edx, [esp + 4] ; Ambil argumen pertama (alamat IDT pointer) dari stack
+    lidt [edx]         ; Jalankan instruksi Load IDT
+    sti                ; Aktifkan interupsi global (Set Interrupt Flag)
+    ret
+
+; Beritahu Assembly bahwa fungsi C ini ada di file lain
+extern keyboard_handler_c
+
+global keyboard_handler_asm
+keyboard_handler_asm:
+    pusha               ; Simpan semua register umum (EAX, ECX, dll) ke stack
+    
+    call keyboard_handler_c ; Panggil fungsi utama driver keyboard di kernel.c
+    
+    popa                ; Kembalikan semua register ke kondisi semula
+    iret                ; Interrupt Return (perintah khusus untuk menyudahi interupsi)
+
+extern default_handler_c
+
+global default_handler_asm
+default_handler_asm:
+    pusha
+    call default_handler_c
+    popa
+    iret

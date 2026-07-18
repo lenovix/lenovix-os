@@ -13,8 +13,11 @@ boot.o: boot.asm
 kernel.o: kernel.c
 	$(CC) $(CFLAGS) kernel.c -o kernel.o
 
-lenovix.bin: boot.o kernel.o
-	$(LD) $(LDFLAGS) boot.o kernel.o -o lenovix.bin
+idt.o: idt.c
+	$(CC) $(CFLAGS) idt.c -o idt.o
+
+lenovix.bin: boot.o kernel.o idt.o
+	$(LD) $(LDFLAGS) boot.o kernel.o idt.o -o lenovix.bin
 
 clean:
 	rm -f *.o lenovix.bin
