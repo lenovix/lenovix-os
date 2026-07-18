@@ -35,3 +35,10 @@ inb:
     mov dx, [esp + 4] ; Ambil argumen pertama (nomor port) dari stack
     in al, dx         ; Baca byte dari port DX dan simpan ke AL
     ret               ; Kembali ke fungsi C, mengembalikan nilai di AL
+
+global outb
+outb:
+    mov dx, [esp + 4] ; Ambil argumen pertama (nomor port) dari stack
+    mov al, [esp + 8] ; Ambil argumen kedua (data byte) dari stack
+    out dx, al        ; Kirim data di AL ke port DX
+    ret

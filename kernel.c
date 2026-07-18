@@ -9,6 +9,18 @@ char command_buffer[256];
 int command_index = 0;
 
 extern unsigned char inb(unsigned short port);
+extern void outb(unsigned short port, unsigned char data);
+
+void update_hardware_cursor(void) {
+    // Hitung posisi linear di memori VGA (0 sampai 1999)
+    unsigned short position = cursor_y * VGA_WIDTH + cursor_x;
+
+    // Kirim perintah ke CRT Controller Register untuk mengatur posisi kursor
+    outb(0x3D4, 0x0F);
+    outb(0x3D5, (unsigned char)(position & 0xFF));        // Byte bawah (low)
+    outb(0x3D4, 0x0E);
+    outb(0x3D5, (unsigned char)((position >> 8) & 0xFF)); // Byte atas (high)
+}
 
 // Fungsi buatan sendiri untuk membandingkan dua string (seperti strcmp di C standar)
 int string_compare(const char *str1, const char *str2) {
@@ -33,6 +45,7 @@ void clear_screen(void) {
     }
     cursor_x = 0;
     cursor_y = 0;
+    update_hardware_cursor();
 }
 
 void kprint_char(char c, char color) {
@@ -60,6 +73,7 @@ void kprint_char(char c, char color) {
         cursor_x = 0;
         cursor_y++;
     }
+    update_hardware_cursor();
 }
 
 void kprint(const char *str, char color) {
