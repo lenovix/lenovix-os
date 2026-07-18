@@ -1,0 +1,8 @@
+sudo apt update
+sudo apt install nasm build-essential qemu-system-x86 binutils-x86-64-linux-gnu gcc-x86-64-linux-gnu
+
+lenovix-os/
+├── boot.asm      # Bootloader (kode Assembly pertama yang dibaca komputer)
+├── kernel.c      # Kernel utama Lenovix OS (Bahasa C)
+├── linker.ld     # Skrip untuk mengatur posisi kode di memori
+└── Makefile      # Otomatisasi proses compile
