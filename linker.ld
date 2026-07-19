@@ -2,23 +2,31 @@ ENTRY(_start)
 
 SECTIONS
 {
-    . = 1M; /* Kernel ditaruh di memori 1 MB */
+    /* Kernel diletakkan mulai dari alamat 1MB */
+    . = 1M;
 
-    .text BLOCK(4K) : ALIGN(4K) {
+    .text BLOCK(4K) : ALIGN(4K)
+    {
         *(.multiboot)
         *(.text)
     }
 
-    .rodata BLOCK(4K) : ALIGN(4K) {
+    .rodata BLOCK(4K) : ALIGN(4K)
+    {
         *(.rodata)
     }
 
-    .data BLOCK(4K) : ALIGN(4K) {
+    .data BLOCK(4K) : ALIGN(4K)
+    {
         *(.data)
     }
 
-    .bss BLOCK(4K) : ALIGN(4K) {
+    .bss BLOCK(4K) : ALIGN(4K)
+    {
         *(COMMON)
         *(.bss)
     }
+
+    /* TEPAT DI SINI: Definisikan simbol akhir kernel */
+    end = .;
 }

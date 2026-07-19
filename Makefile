@@ -7,6 +7,12 @@ LDFLAGS = -m elf_i386 -T linker.ld
 
 all: lenovix.bin
 
+lenovix.bin: boot.o kernel.o idt.o gdt.o timer.o pmm.o
+	$(LD) $(LDFLAGS) boot.o kernel.o idt.o gdt.o timer.o pmm.o -o lenovix.bin
+
+pmm.o: pmm.c
+	$(CC) $(CFLAGS) pmm.c -o pmm.o
+
 boot.o: boot.asm
 	$(AS) -f elf32 boot.asm -o boot.o
 
@@ -16,8 +22,11 @@ kernel.o: kernel.c
 idt.o: idt.c
 	$(CC) $(CFLAGS) idt.c -o idt.o
 
-lenovix.bin: boot.o kernel.o idt.o
-	$(LD) $(LDFLAGS) boot.o kernel.o idt.o -o lenovix.bin
+gdt.o: gdt.c
+	$(CC) $(CFLAGS) gdt.c -o gdt.o
+
+timer.o: timer.c
+	$(CC) $(CFLAGS) timer.c -o timer.o
 
 clean:
 	rm -f *.o lenovix.bin

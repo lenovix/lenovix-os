@@ -18,6 +18,7 @@ extern void load_idt(unsigned int idt_ptr_address);
 extern void outb(unsigned short port, unsigned char data);
 extern void keyboard_handler_asm(void);
 extern void default_handler_asm(void); // Ambil handler default
+extern void timer_handler_asm(void);
 
 void set_idt_gate(unsigned char num, unsigned int base, unsigned short sel, unsigned char flags) {
     idt[num].base_low = base & 0xFFFF;
@@ -53,12 +54,15 @@ void init_idt(void) {
 
     remap_pic();
 
-    // 1. Isi DULU semua 256 gerbang dengan default handler agar aman dari interupsi liar/timer
+   // 1. Isi semua dengan default handler terlebih dahulu
     for (int i = 0; i < 256; i++) {
         set_idt_gate(i, (unsigned int)default_handler_asm, 0x08, 0x8E);
     }
 
-    // 2. Baru timpa gerbang nomor 33 khusus untuk Keyboard
+    // 2. Daftarkan IRQ 0 (Timer) ke nomor 32
+    set_idt_gate(32, (unsigned int)timer_handler_asm, 0x08, 0x8E); // <-- TAMBAHKAN INI
+
+    // 3. Daftarkan IRQ 1 (Keyboard) ke nomor 33
     set_idt_gate(33, (unsigned int)keyboard_handler_asm, 0x08, 0x8E);
 
     load_idt((unsigned int)&idt_ptr);

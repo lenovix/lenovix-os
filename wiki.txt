@@ -13,9 +13,9 @@
 
 >>> Rencana Rilis Bertahap (Roadmap Lenovix OS):
 Versi 0.2: The Time & Memory Update (Fokus: Fondasi Internal)
-[ ] Driver PIT (Programmable Interval Timer): Mengaktifkan IRQ 0 untuk menghitung interupsi waktu nyata (membuat fungsi sleep/delay dan sistem uptime).
-[ ] GDT (Global Descriptor Table): Mengamankan segmentasi memori kernel dan proteksi akses data.
-[ ] Physical Memory Manager: Membuat pengelola alokasi memori dasar (mengamankan halaman/page memori yang kosong).
+[x] Driver PIT (Programmable Interval Timer): Mengaktifkan IRQ 0 untuk menghitung interupsi waktu nyata (membuat fungsi sleep/delay dan sistem uptime).
+[x] GDT (Global Descriptor Table): Mengamankan segmentasi memori kernel dan proteksi akses data.
+[x] Physical Memory Manager: Membuat pengelola alokasi memori dasar (mengamankan halaman/page memori yang kosong).
 
 Versi 0.3: Dynamic Allocation & Advanced Shell (Fokus: Fitur CLI)
 [ ] Heap Allocator (malloc & free): Membuat fungsi alokasi memori dinamis agar kernel bisa memesan memori sesuai kebutuhan runtime.

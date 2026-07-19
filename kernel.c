@@ -1,3 +1,5 @@
+#include "multiboot.h"
+
 int cursor_x = 0;
 int cursor_y = 0;
 const int VGA_WIDTH = 80;
@@ -11,6 +13,14 @@ extern unsigned char inb(unsigned short port);
 extern void outb(unsigned short port, unsigned char data);
 extern void shutdown_qemu(void);
 extern void init_idt(void); // Ambil fungsi inisialisasi IDT
+extern void init_gdt(void);
+extern void init_timer(void);
+extern void sleep(unsigned int ticks);
+extern unsigned int timer_ticks;
+
+// Variabel simbol eksternal dari Linker Script untuk mengetahui titik akhir kernel di RAM
+extern unsigned int end; 
+extern void init_pmm(struct multiboot_info* mb_info, unsigned int kernel_end_addr);
 
 int string_compare(const char *str1, const char *str2) {
     int i = 0;
@@ -100,6 +110,25 @@ void kprint(const char *str, char color) {
     }
 }
 
+void int_to_string(int num, char *str) {
+    int i = 0;
+    if (num == 0) {
+        str[i++] = '0';
+        str[i] = '\0';
+        return;
+    }
+    int temp = num;
+    while (temp > 0) {
+        i++;
+        temp /= 10;
+    }
+    str[i] = '\0';
+    while (num > 0) {
+        str[--i] = (num % 10) + '0';
+        num /= 10;
+    }
+}
+
 void process_command(void) {
     kprint("\n", 0x07);
     command_buffer[command_index] = '\0';
@@ -113,6 +142,7 @@ void process_command(void) {
         kprint("Perintah Lenovix OS yang tersedia:\n", 0x0E);
         kprint("  help     - Menampilkan daftar perintah ini\n", 0x0F);
         kprint("  about    - Informasi mengenai sistem operasi ini\n", 0x0F);
+        kprint("  uptime   - Menampilkan durasi aktif sistem operasi\n", 0x0F);
         kprint("  clear    - Membersihkan layar shell\n", 0x0F);
         kprint("  shutdown - Mematikan sistem operasi dan hardware\n", 0x0F);
     } 
@@ -128,7 +158,17 @@ void process_command(void) {
         kprint("Mematikan Lenovix OS...", 0x0C);
         for(volatile int i = 0; i < 50000000; i++); 
         shutdown_qemu();
-    } 
+    }
+    else if (string_compare(command_buffer, "uptime")) {
+        // Karena 100 ticks = 1 detik
+        unsigned int total_seconds = timer_ticks / 100;
+        char sec_str[16];
+        int_to_string(total_seconds, sec_str);
+
+        kprint("Lenovix OS telah aktif selama: ", 0x0F);
+        kprint(sec_str, 0x0A);
+        kprint(" detik.\n", 0x0F);
+    }
     else {
         kprint("Perintah '", 0x0C);
         kprint(command_buffer, 0x0C);
@@ -215,21 +255,28 @@ void keyboard_handler_c(void) {
     outb(0x20, 0x20);
 }
 
-void kernel_main(void) {
+void kernel_main(struct multiboot_info* mb_info) { // Tambahkan parameter struct
+    init_gdt();
     clear_screen();
 
     kprint("Selamat Datang di Lenovix OS!\n", 0x0A);
     kprint("-----------------------------\n", 0x07);
+    kprint("Inisialisasi GDT Proteksi Memori... [ OK ]\n", 0x0A);
     
-    // Aktifkan IDT & Interrupt System
     kprint("Mengaktifkan IDT & Hardware Interrupts... ", 0x0F);
     init_idt();
     kprint("[ OK ]\n", 0x0A);
     
+    init_timer();
+    
+    // Inisialisasi Physical Memory Manager
+    kprint("Mengaktifkan Physical Memory Manager (PMM)... ", 0x0F);
+    init_pmm(mb_info, (unsigned int)&end);
+    kprint("[ OK ]\n", 0x0A);
+
     kprint("Silakan ketik perintah Anda:\n\n> ", 0x0E);
 
-    // CPU sekarang bisa santai, tidak ada loop polling keyboard lagi!
     while(1) {
-        asm volatile("hlt"); // Perintah hemat daya: CPU tidur sampai ada interupsi masuk
+        asm volatile("hlt");
     }
 }

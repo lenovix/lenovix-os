@@ -23,6 +23,7 @@ extern kernel_main
 
 _start:
     mov esp, stack_top   ; Set up stack pointer
+    push ebx                ; Push alamat Multiboot Info sebagai argumen pertama kernel_main
     call kernel_main     ; Panggil fungsi di kernel.c
     
     cli
@@ -83,3 +84,30 @@ default_handler_asm:
     call default_handler_c
     popa
     iret
+
+global gdt_flush
+gdt_flush:
+    mov edx, [esp + 4] ; Ambil argumen pertama (alamat GDT pointer) dari stack
+    lgdt [edx]         ; Jalankan instruksi Load GDT
+
+    ; Lakukan Far Jump untuk memperbarui register CS (Code Segment) ke 0x08
+    jmp 0x08:.reload_segments
+
+.reload_segments:
+    ; Perbarui semua register data segment ke 0x10
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+    ret
+
+extern timer_handler_c
+
+global timer_handler_asm
+timer_handler_asm:
+    pusha               ; Simpan semua register umum
+    call timer_handler_c ; Panggil fungsi C untuk memproses detak timer
+    popa                ; Kembalikan semua register
+    iret                ; Selesai interupsi
