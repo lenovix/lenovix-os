@@ -83,3 +83,19 @@ void pmm_free_block(void* ptr) {
     unsigned int block = addr / PMM_BLOCK_SIZE;
     pmm_clear_bit(block);
 }
+
+// Menghitung total blok memori yang bebas (bit bernilai 0)
+unsigned int pmm_get_free_block_count(void) {
+    unsigned int free_blocks = 0;
+    for (unsigned int i = 0; i < pmm_max_blocks; i++) {
+        if (!pmm_test_bit(i)) {
+            free_blocks++;
+        }
+    }
+    return free_blocks;
+}
+
+// Menghitung total blok memori maksimal
+unsigned int pmm_get_max_blocks(void) {
+    return pmm_max_blocks;
+}

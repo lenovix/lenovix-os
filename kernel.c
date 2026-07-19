@@ -17,10 +17,10 @@ extern void init_gdt(void);
 extern void init_timer(void);
 extern void sleep(unsigned int ticks);
 extern unsigned int timer_ticks;
-
-// Variabel simbol eksternal dari Linker Script untuk mengetahui titik akhir kernel di RAM
 extern unsigned int end; 
 extern void init_pmm(struct multiboot_info* mb_info, unsigned int kernel_end_addr);
+extern unsigned int pmm_get_free_block_count(void);
+extern unsigned int pmm_get_max_blocks(void);
 
 int string_compare(const char *str1, const char *str2) {
     int i = 0;
@@ -140,10 +140,11 @@ void process_command(void) {
 
     if (string_compare(command_buffer, "help")) {
         kprint("Perintah Lenovix OS yang tersedia:\n", 0x0E);
-        kprint("  help     - Menampilkan daftar perintah ini\n", 0x0F);
-        kprint("  about    - Informasi mengenai sistem operasi ini\n", 0x0F);
+        kprint("  free     - Menampilkan informasi memori\n", 0x0F);
         kprint("  uptime   - Menampilkan durasi aktif sistem operasi\n", 0x0F);
         kprint("  clear    - Membersihkan layar shell\n", 0x0F);
+        kprint("  about    - Informasi mengenai sistem operasi ini\n", 0x0F);
+        kprint("  help     - Menampilkan daftar perintah ini\n", 0x0F);
         kprint("  shutdown - Mematikan sistem operasi dan hardware\n", 0x0F);
     } 
     else if (string_compare(command_buffer, "about")) {
@@ -168,6 +169,26 @@ void process_command(void) {
         kprint("Lenovix OS telah aktif selama: ", 0x0F);
         kprint(sec_str, 0x0A);
         kprint(" detik.\n", 0x0F);
+    }
+    else if (string_compare(command_buffer, "free")) {
+        unsigned int max_blocks = pmm_get_max_blocks();
+        unsigned int free_blocks = pmm_get_free_block_count();
+        unsigned int used_blocks = max_blocks - free_blocks;
+
+        // Konversi blok ke Megabyte (1 blok = 4KB, jadi dibagi 256 untuk dapat MB)
+        unsigned int total_mb = (max_blocks * 4) / 1024;
+        unsigned int free_mb = (free_blocks * 4) / 1024;
+        unsigned int used_mb = (used_blocks * 4) / 1024;
+
+        char str_total[16], str_free[16], str_used[16];
+        int_to_string(total_mb, str_total);
+        int_to_string(free_mb, str_free);
+        int_to_string(used_mb, str_used);
+
+        kprint("Informasi Memori Fisik RAM:\n", 0x0E);
+        kprint("  Total RAM: ", 0x0F); kprint(str_total, 0x0A); kprint(" MB\n", 0x0F);
+        kprint("  Terpakai : ", 0x0F); kprint(str_used, 0x0C); kprint(" MB (Kernel & PMM)\n", 0x0F);
+        kprint("  Bebas    : ", 0x0F); kprint(str_free, 0x0A); kprint(" MB\n", 0x0F);
     }
     else {
         kprint("Perintah '", 0x0C);
