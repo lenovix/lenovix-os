@@ -6,3 +6,5 @@ lenovix-os/
 ├── kernel.c      # Kernel utama Lenovix OS (Bahasa C)
 ├── linker.ld     # Skrip untuk mengatur posisi kode di memori
 └── Makefile      # Otomatisasi proses compile
+
+make clean && make run

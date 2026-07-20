@@ -18,8 +18,8 @@ Versi 0.2: The Time & Memory Update (Fokus: Fondasi Internal)
 [x] Physical Memory Manager: Membuat pengelola alokasi memori dasar (mengamankan halaman/page memori yang kosong).
 
 Versi 0.3: Dynamic Allocation & Advanced Shell (Fokus: Fitur CLI)
-[ ] Heap Allocator (malloc & free): Membuat fungsi alokasi memori dinamis agar kernel bisa memesan memori sesuai kebutuhan runtime.
-[ ] Shell History & Buffer Scrolling: Menambahkan fitur riwayat perintah (menekan tombol panah atas untuk memanggil perintah lama) dan kemampuan layar untuk scrolling ke bawah jika teks sudah penuh.
+[x] Heap Allocator (malloc & free): Membuat fungsi alokasi memori dinamis agar kernel bisa memesan memori sesuai kebutuhan runtime.
+[x] Shell History & Buffer Scrolling: Menambahkan fitur riwayat perintah (menekan tombol panah atas untuk memanggil perintah lama) dan kemampuan layar untuk scrolling ke bawah jika teks sudah penuh.
 
 Versi 0.4: Storage & Filesystem (Fokus: Data)
 [ ] Driver IDE/ATA Harddrive: Membuat kode agar kernel bisa membaca dan menulis sektor pada harddisk virtual.

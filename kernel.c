@@ -1,13 +1,15 @@
 #include "multiboot.h"
+#include "heap.h"
 
 int cursor_x = 0;
 int cursor_y = 0;
 const int VGA_WIDTH = 80;
 const int VGA_HEIGHT = 25;
 char *video_memory = (char *) 0xB8000;
-
 char command_buffer[256];
 int command_index = 0;
+
+void *test_ptr = NULL;
 
 extern unsigned char inb(unsigned short port);
 extern void outb(unsigned short port, unsigned char data);
@@ -21,6 +23,11 @@ extern unsigned int end;
 extern void init_pmm(struct multiboot_info* mb_info, unsigned int kernel_end_addr);
 extern unsigned int pmm_get_free_block_count(void);
 extern unsigned int pmm_get_max_blocks(void);
+
+#define HISTORY_MAX 5
+char history[HISTORY_MAX][256];
+int history_count = 0;
+int history_index = -1; // -1 artinya sedang mengetik perintah baru
 
 int string_compare(const char *str1, const char *str2) {
     int i = 0;
@@ -138,11 +145,33 @@ void process_command(void) {
         return;
     }
 
+    // --- FITUR BARU: Simpan ke History ---
+    if (history_count < HISTORY_MAX) {
+        // Salin command_buffer ke history slot berikutnya
+        for (int i = 0; i <= command_index; i++) {
+            history[history_count][i] = command_buffer[i];
+        }
+        history_count++;
+    } else {
+        // Geser history lama ke atas (FIFO) jika buffer penuh
+        for (int i = 0; i < HISTORY_MAX - 1; i++) {
+            for (int j = 0; j < 256; j++) {
+                history[i][j] = history[i+1][j];
+            }
+        }
+        for (int i = 0; i <= command_index; i++) {
+            history[HISTORY_MAX - 1][i] = command_buffer[i];
+        }
+    }
+    history_index = -1; // Reset index history setelah ditekan Enter
+
     if (string_compare(command_buffer, "help")) {
         kprint("Perintah Lenovix OS yang tersedia:\n", 0x0E);
         kprint("  free     - Menampilkan informasi memori\n", 0x0F);
         kprint("  uptime   - Menampilkan durasi aktif sistem operasi\n", 0x0F);
         kprint("  clear    - Membersihkan layar shell\n", 0x0F);
+        kprint("  alloc    - Memori dialokasikan\n", 0x0F);
+        kprint("  dealloc  - Memori didealokasikan\n", 0x0F);
         kprint("  about    - Informasi mengenai sistem operasi ini\n", 0x0F);
         kprint("  help     - Menampilkan daftar perintah ini\n", 0x0F);
         kprint("  shutdown - Mematikan sistem operasi dan hardware\n", 0x0F);
@@ -190,6 +219,47 @@ void process_command(void) {
         kprint("  Terpakai : ", 0x0F); kprint(str_used, 0x0C); kprint(" MB (Kernel & PMM)\n", 0x0F);
         kprint("  Bebas    : ", 0x0F); kprint(str_free, 0x0A); kprint(" MB\n", 0x0F);
     }
+    else if (string_compare(command_buffer, "alloc")) {
+        if (test_ptr != NULL) {
+            kprint("Memori sudah dialokasikan sebelumnya! Ketik 'dealloc' dulu.\n", 0x0C);
+        } else {
+            // Alokasikan memori sebesar 64 Byte di heap
+            test_ptr = kmalloc(64);
+            if (test_ptr != NULL) {
+                // Isi pointer dengan string rahasia
+                char *str = (char *)test_ptr;
+                char sample[] = "Lenovix OS Dynamic Heap Works!";
+                for(int i = 0; sample[i] != '\0'; i++) {
+                    str[i] = sample[i];
+                    str[i+1] = '\0';
+                }
+
+                kprint("Berhasil alokasi 64 byte di alamat Heap: 0x", 0x0A);
+                
+                // Print alamat memori hex sederhana
+                unsigned int addr = (unsigned int)test_ptr;
+                char hex_str[16];
+                int_to_string(addr, hex_str); // Atau tampilkan desimal/hex
+                kprint(hex_str, 0x0E);
+                kprint("\n", 0x0F);
+
+                kprint("Isi Data Memori: \"", 0x0F);
+                kprint((char*)test_ptr, 0x0B);
+                kprint("\"\n", 0x0F);
+            } else {
+                kprint("Gagal mengalokasikan memori (Out of memory)!\n", 0x0C);
+            }
+        }
+    }
+    else if (string_compare(command_buffer, "dealloc")) {
+        if (test_ptr == NULL) {
+            kprint("Belum ada memori yang dialokasikan!\n", 0x0C);
+        } else {
+            kfree(test_ptr);
+            test_ptr = NULL;
+            kprint("Memori berhasil dibebaskan (kfree OK)!\n", 0x0A);
+        }
+    }
     else {
         kprint("Perintah '", 0x0C);
         kprint(command_buffer, 0x0C);
@@ -215,9 +285,68 @@ unsigned char scancode_to_ascii_shift[128] = {
   '|', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?',   0, '*',   0, ' '
 };
 
+static int is_extended = 0;
 // FUNGSI BARU: Dipanggil langsung oleh sistem interupsi Assembly
 void keyboard_handler_c(void) {
     unsigned char scancode = inb(0x60); // Baca data tombol dari port keyboard
+
+    // Cek jika ini adalah byte penanda Extended Key (0xE0)
+    if (scancode == 0xE0) {
+        is_extended = 1;
+        outb(0x20, 0x20);
+        return;
+    }
+
+    if (is_extended) {
+        is_extended = 0;
+        
+        // Scancode Panah Atas (0x48)
+        if (scancode == 0x48 && history_count > 0) {
+            if (history_index == -1) {
+                history_index = history_count - 1;
+            } else if (history_index > 0) {
+                history_index--;
+            }
+
+            // Hapus tampilan perintah saat ini dari layar
+            while (command_index > 0) {
+                kprint_char('\b', 0x0F);
+                command_index--;
+            }
+
+            // Tampilkan perintah dari history ke layar & buffer
+            for (int i = 0; history[history_index][i] != '\0'; i++) {
+                command_buffer[i] = history[history_index][i];
+                kprint_char(command_buffer[i], 0x0F);
+                command_index++;
+            }
+            command_buffer[command_index] = '\0';
+        }
+        // Scancode Panah Bawah (0x50)
+        else if (scancode == 0x50 && history_index != -1) {
+            history_index++;
+            
+            // Hapus teks saat ini di layar
+            while (command_index > 0) {
+                kprint_char('\b', 0x0F);
+                command_index--;
+            }
+
+            if (history_index < history_count) {
+                for (int i = 0; history[history_index][i] != '\0'; i++) {
+                    command_buffer[i] = history[history_index][i];
+                    kprint_char(command_buffer[i], 0x0F);
+                    command_index++;
+                }
+                command_buffer[command_index] = '\0';
+            } else {
+                history_index = -1; // Kembali ke baris kosong
+            }
+        }
+
+        outb(0x20, 0x20);
+        return;
+    }
 
     // 1. Cek jika tombol Shift ditekan (Press)
     if (scancode == 0x2A || scancode == 0x36) {
@@ -293,6 +422,10 @@ void kernel_main(struct multiboot_info* mb_info) { // Tambahkan parameter struct
     // Inisialisasi Physical Memory Manager
     kprint("Mengaktifkan Physical Memory Manager (PMM)... ", 0x0F);
     init_pmm(mb_info, (unsigned int)&end);
+    kprint("[ OK ]\n", 0x0A);
+
+    kprint("Inisialisasi Dynamic Heap Allocator (kmalloc)... ", 0x0F);
+    init_heap();
     kprint("[ OK ]\n", 0x0A);
 
     kprint("Silakan ketik perintah Anda:\n\n> ", 0x0E);
