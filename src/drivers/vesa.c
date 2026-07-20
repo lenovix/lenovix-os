@@ -1,18 +1,19 @@
 #include "vesa.h"
 
-static unsigned int *vram = 0;           // VRAM Kartu Grafis Asli
-static unsigned int back_buffer[1024 * 768]; // Back Buffer di RAM (3.1 MB)
+static unsigned int *vram = 0;
+static unsigned int back_buffer[1024 * 768];
 static unsigned int width = 1024;
 static unsigned int height = 768;
-static unsigned int pitch = 0;
-static unsigned char bpp = 0;
 
-// Memory Copy Helper bawaan C
-static void *custom_memcpy(void *dest, const void *src, unsigned int n) {
-    char *d = dest;
-    const char *s = src;
-    while (n--) *d++ = *s++;
-    return dest;
+// Optimasi Memcpy 32-bit Menggunakan Inline Assembly 'rep movsl'
+static inline void memcpy32(void *dest, const void *src, unsigned int count) {
+    asm volatile (
+        "cld\n\t"
+        "rep movsl"
+        : "+D"(dest), "+S"(src), "+c"(count)
+        :
+        : "memory"
+    );
 }
 
 void init_vesa(multiboot_info_t *mb_info) {
@@ -20,12 +21,9 @@ void init_vesa(multiboot_info_t *mb_info) {
         vram = (unsigned int *)(unsigned long)mb_info->framebuffer_addr;
         width = mb_info->framebuffer_width;
         height = mb_info->framebuffer_height;
-        pitch = mb_info->framebuffer_pitch;
-        bpp = mb_info->framebuffer_bpp;
     }
 }
 
-// Sekarang kita gambar ke back_buffer, BUKAN ke vram
 void vesa_put_pixel(int x, int y, unsigned int color) {
     if (x < 0 || (unsigned int)x >= width || y < 0 || (unsigned int)y >= height) {
         return;
@@ -33,24 +31,34 @@ void vesa_put_pixel(int x, int y, unsigned int color) {
     back_buffer[y * width + x] = color;
 }
 
+// Clear screen menggunakan instruksi 'rep stosl' yang sudah diperbaiki
 void vesa_clear_screen(unsigned int color) {
-    for (unsigned int i = 0; i < width * height; i++) {
-        back_buffer[i] = color;
-    }
+    unsigned int total_pixels = width * height;
+    unsigned int *ptr = back_buffer;
+
+    asm volatile (
+        "cld\n\t"
+        "rep stosl"
+        : "+D"(ptr), "+c"(total_pixels)
+        : "a"(color)
+        : "memory"
+    );
 }
 
 void vesa_draw_rect(int x, int y, int w, int h, unsigned int color) {
     for (int i = y; i < y + h; i++) {
+        if (i < 0 || (unsigned int)i >= height) continue;
         for (int j = x; j < x + w; j++) {
-            vesa_put_pixel(j, i, color);
+            if (j < 0 || (unsigned int)j >= width) continue;
+            back_buffer[i * width + j] = color;
         }
     }
 }
 
-// Pindahkan semua pixel dari Back Buffer RAM ke VRAM Asli sekaligus
+// Mengirimkan Back Buffer ke VRAM Real secepat kilat
 void vesa_update(void) {
     if (vram) {
-        custom_memcpy(vram, back_buffer, width * height * sizeof(unsigned int));
+        memcpy32(vram, back_buffer, width * height);
     }
 }
 
