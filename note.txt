@@ -8,3 +8,7 @@ lenovix-os/
 └── Makefile      # Otomatisasi proses compile
 
 make clean && make run
+
+GIT Command:
+git rm --cached -r .vscode
+git commit -m "Remove .vscode tracking"
