@@ -13,6 +13,7 @@ OBJS = boot.o \
        keyboard.o \
        tty.o \
 	   vesa.o \
+	   mouse.o \
        vfs.o \
        heap.o \
        kernel.o \
@@ -38,6 +39,9 @@ idt.o: src/acrh/x86/idt.c
 	$(CC) $(CFLAGS) $< -o $@
 
 # --- Drivers ---
+mouse.o: src/drivers/mouse.c
+	$(CC) $(CFLAGS) $< -o $@
+
 vesa.o: src/drivers/vesa.c
 	$(CC) $(CFLAGS) $< -o $@
 

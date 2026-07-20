@@ -6,6 +6,7 @@
 #include "vfs.h"
 #include "task.h"
 #include "vesa.h"
+#include "mouse.h"
 
 extern void init_gdt(void);
 extern void init_idt(void);
@@ -79,46 +80,56 @@ void isr_syscall_handler(unsigned int syscall_num, unsigned int arg1) {
 //     }
 // }
 
-void kernel_main(unsigned int magic, multiboot_info_t *mb_info) {
-    // Menghindari compiler warning unused variable 'magic'
-    (void)magic;
-
-    // Inisialisasi driver VESA VBE
-    init_vesa(mb_info);
-
-    // 1. Cat seluruh layar dengan warna Biru Tua (0x001F3F)
+void render_desktop(mouse_state_t *mouse) {
+    // 1. Clear & Redraw Background Desktop
     vesa_clear_screen(0x001F3F);
 
-    // 2. Gambar Jendela GUI Sederhana di tengah layar
-    // Jendela Putih (X: 300, Y: 200, Width: 400, Height: 250)
+    // 2. Window Utama
     vesa_draw_rect(300, 200, 400, 250, 0xFFFFFF); 
-
-    // Header Jendela Warna Biru Cerah (X: 300, Y: 200, Width: 400, Height: 30)
     vesa_draw_rect(300, 200, 400, 30, 0x0074D9);
-
-    // Tombol Close Merah (X: 665, Y: 205, Width: 30, Height: 20)
     vesa_draw_rect(665, 205, 30, 20, 0xFF4136);
 
-    // 3. Render Teks pada Jendela GUI
-    // Judul Jendela di Header (Putih)
     vesa_draw_string(310, 207, "Lenovix OS - VESA Mode", 0xFFFFFF);
-
-    // Karakter 'X' pada Tombol Close Merah (Putih)
     vesa_draw_string(676, 207, "X", 0xFFFFFF);
-
-    // Isi Pesan di Dalam Jendela (Hitam)
     vesa_draw_string(320, 250, "Selamat Datang di Lenovix OS!", 0x000000);
     vesa_draw_string(320, 280, "Mode VESA VBE 1024x768 Active", 0x000000);
 
-    // 4. Taskbar Sederhana di Bagian Bawah Layar
-    vesa_draw_rect(0, 728, 1024, 40, 0x111111); // Taskbar Hitam
-    vesa_draw_rect(5, 733, 80, 30, 0x2ECC40);   // Tombol Start Hijau
-
-    // Teks 'START' di dalam Tombol Start (Putih)
+    // 3. Taskbar & Button
+    vesa_draw_rect(0, 728, 1024, 40, 0x111111);
+    
+    // Jika tombol kiri mouse ditekan di atas Tombol START, ganti warna jadi hijau muda
+    if (mouse->x >= 5 && mouse->x <= 85 && mouse->y >= 733 && mouse->y <= 763 && mouse->left_button) {
+        vesa_draw_rect(5, 733, 80, 30, 0x2ECC71); // Highlight saat diklik
+    } else {
+        vesa_draw_rect(5, 733, 80, 30, 0x2ECC40); 
+    }
     vesa_draw_string(25, 740, "START", 0xFFFFFF);
 
-    // Halt CPU agar tampilan tidak hilang
+    // 4. Render Kursor Mouse paling atas
+    vesa_draw_cursor(mouse->x, mouse->y);
+}
+
+void kernel_main(unsigned int magic, multiboot_info_t *mb_info) {
+    (void)magic;
+
+    init_vesa(mb_info);
+    mouse_init();
+
+    mouse_state_t *mouse = mouse_get_state();
+    int last_x = -1, last_y = -1;
+
+    // Initial render
+    render_desktop(mouse);
+
     while(1) {
-        asm volatile("hlt");
+        // Polling paket data dari mouse
+        mouse_handler();
+
+        // Hanya gambar ulang layar jika mouse bergerak atau tombol klik berubah
+        if (mouse->x != last_x || mouse->y != last_y || mouse->left_button) {
+            last_x = mouse->x;
+            last_y = mouse->y;
+            render_desktop(mouse);
+        }
     }
 }
