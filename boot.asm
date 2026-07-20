@@ -111,3 +111,39 @@ timer_handler_asm:
     call timer_handler_c ; Panggil fungsi C untuk memproses detak timer
     popa                ; Kembalikan semua register
     iret                ; Selesai interupsi
+
+global syscall_handler
+extern isr_syscall_handler
+
+syscall_handler:
+    pusha               ; Simpan EDI, ESI, EBP, ESP, EBX, EDX, ECX, EAX
+
+    push ebx            ; Argumen 2 C (arg1 = pointer ke msg)
+    push eax            ; Argumen 1 C (syscall_num = 1)
+    call isr_syscall_handler
+    add esp, 8          ; Clean up 2 argumen dari stack
+
+    popa                ; Kembalikan register
+    iret                ; Return dari interupsi
+
+global switch_to_task
+
+; void switch_to_task(unsigned int *old_esp, unsigned int new_esp);
+switch_to_task:
+    ; 1. Simpan konteks task saat ini ke stack
+    pushfd              ; Simpan EFLAGS
+    push cs             ; Simpan Code Segment
+    ; (EIP disimpan otomatis saat 'call')
+    pusha               ; Simpan EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI
+
+    ; 2. Simpan ESP lama ke *old_esp
+    mov eax, [esp + 44] ; Ambil argumen pertama (old_esp pointer)
+    mov [eax], esp      ; Simpan nilai ESP saat ini ke *old_esp
+
+    ; 3. Ambil ESP baru dari argumen kedua (new_esp)
+    mov edx, [esp + 48] ; Ambil argumen kedua (new_esp)
+    mov esp, edx        ; Pindahkan ESP CPU ke Stack Task Baru!
+
+    ; 4. Restore register task baru dari stack barunya
+    popa                ; Pop 8 general registers
+    iret                ; Jump & Restore EIP, CS, EFLAGS (Task Baru Berjalan!)

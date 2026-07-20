@@ -14,8 +14,8 @@ struct gdt_ptr_struct {
     unsigned int   base;        // Alamat awal tabel GDT di RAM
 } __attribute__((packed));
 
-// Kita buat 3 entri: Null, Code, dan Data
-struct gdt_entry_struct gdt[3];
+// SESUDAH: Kita membuat 5 entri (0: Null, 1: Kernel Code, 2: Kernel Data, 3: User Code, 4: User Data)
+struct gdt_entry_struct gdt[5];
 struct gdt_ptr_struct gdt_ptr;
 
 // Hubungkan fungsi Assembly dari boot.asm
@@ -36,19 +36,26 @@ void set_gdt_gate(int num, unsigned int base, unsigned int limit, unsigned char 
 
 // Inisialisasi awal GDT
 void init_gdt(void) {
-    gdt_ptr.limit = (sizeof(struct gdt_entry_struct) * 3) - 1;
+    // SEBELUM: gdt_ptr.limit = (sizeof(struct gdt_entry_struct) * 3) - 1;
+    
+    // SESUDAH: Sesuaikan dengan 5 entri
+    gdt_ptr.limit = (sizeof(struct gdt_entry_struct) * 5) - 1;
     gdt_ptr.base  = (unsigned int)&gdt;
 
-    // 1. Entry 0: Null Descriptor (Wajib kosong)
+    // 1. Entry 0: Null Descriptor
     set_gdt_gate(0, 0, 0, 0, 0);
 
-    // 2. Entry 1: Code Segment (Base: 0, Limit: 4GB, Access: 0x9A, Granularity: 0xCF)
-    // 0x9A artinya: Present, Ring 0 (Kernel), Executable, Readable
+    // 2. Entry 1: Kernel Code Segment (0x08)
     set_gdt_gate(1, 0, 0xFFFFFFFF, 0x9A, 0xCF);
 
-    // 3. Entry 2: Data Segment (Base: 0, Limit: 4GB, Access: 0x92, Granularity: 0xCF)
-    // 0x92 artinya: Present, Ring 0 (Kernel), Writable, Readable
+    // 3. Entry 2: Kernel Data Segment (0x10)
     set_gdt_gate(2, 0, 0xFFFFFFFF, 0x92, 0xCF);
+
+    // 4. Entry 3: User Mode Code Segment (0x1B)
+    set_gdt_gate(3, 0, 0xFFFFFFFF, 0xFA, 0xCF); 
+
+    // 5. Entry 4: User Mode Data Segment (0x23)
+    set_gdt_gate(4, 0, 0xFFFFFFFF, 0xF2, 0xCF);
 
     // Muat ke CPU
     gdt_flush((unsigned int)&gdt_ptr);

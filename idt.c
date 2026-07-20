@@ -19,6 +19,7 @@ extern void outb(unsigned short port, unsigned char data);
 extern void keyboard_handler_asm(void);
 extern void default_handler_asm(void); // Ambil handler default
 extern void timer_handler_asm(void);
+extern void syscall_handler(void);
 
 void set_idt_gate(unsigned char num, unsigned int base, unsigned short sel, unsigned char flags) {
     idt[num].base_low = base & 0xFFFF;
@@ -64,6 +65,9 @@ void init_idt(void) {
 
     // 3. Daftarkan IRQ 1 (Keyboard) ke nomor 33
     set_idt_gate(33, (unsigned int)keyboard_handler_asm, 0x08, 0x8E);
+
+    // Flag 0xEE membolehkan perintah 'int 0x80' dipanggil dari Ring 3
+    set_idt_gate(0x80, (unsigned int)syscall_handler, 0x08, 0xEE);
 
     load_idt((unsigned int)&idt_ptr);
 }

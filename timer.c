@@ -1,3 +1,5 @@
+#include "task.h"
+
 extern void outb(unsigned short port, unsigned char data);
 extern void kprint(const char *str, char color);
 
@@ -10,6 +12,7 @@ void timer_handler_c(void) {
 
     // Kirim EOI ke Master PIC agar bersedia menerima interupsi berikutnya
     outb(0x20, 0x20);
+    schedule();
 }
 
 // Inisialisasi PIT ke frekuensi 100 Hz

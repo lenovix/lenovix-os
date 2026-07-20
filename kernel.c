@@ -1,6 +1,7 @@
 #include "multiboot.h"
 #include "heap.h"
 #include "vfs.h"
+#include "task.h"
 
 int cursor_x = 0;
 int cursor_y = 0;
@@ -163,6 +164,56 @@ void int_to_string(int num, char *str) {
     }
 }
 
+// Task Background 1
+void task_a(void) {
+    while(1) {
+        // Lakukan tugas background atau sekadar yield
+        for (volatile int i = 0; i < 100000000; i++); // Delay singkat
+        // Kita bisa print titik kecil atau biarkan berjalan diam-diam
+    }
+}
+
+// Task Background 2
+void task_b(void) {
+    while(1) {
+        for (volatile int i = 0; i < 100000000; i++);
+    }
+}
+
+// Handler System Call sederhananya
+void isr_syscall_handler(unsigned int syscall_num, unsigned int arg1) {
+    switch (syscall_num) {
+        case 1: // Syscall 1: Print String dari User Mode
+            kprint("[Syscall Print] Teks dari User Mode: ", 0x0E);
+            kprint((char *)arg1, 0x0B);
+            kprint("\n", 0x0F);
+            break;
+        case 2: // Syscall 2: Exit Task
+            kprint("[Syscall Exit] Task Ring 3 selesai dijalankan.\n", 0x0C);
+            break;
+        default:
+            kprint("Syscall tidak dikenal!\n", 0x0C);
+            break;
+    }
+}
+
+// Fungsi sederhana yang seolah-olah berjalan di User Space (Ring 3)
+void user_function(void) {
+    // Panggil Syscall 1 untuk cetak teks dari Ring 3
+    char *msg = "Halo dari Ring 3 (User Space)!";
+
+    __asm__ __volatile__ (
+        "int $0x80"
+        : 
+        : "a"(1), "b"(msg)
+    );
+
+    // (Opsional) Panggil Syscall Exit jika sudah punya
+    // __asm__ __volatile__ ("int $0x80" : : "a"(2));
+
+    while(1); // Keep alive
+}
+
 void process_command(void) {
     kprint("\n", 0x07);
     command_buffer[command_index] = '\0';
@@ -207,10 +258,26 @@ void process_command(void) {
         kprint("  clear    - Membersihkan layar shell\n", 0x0F);
         kprint("  alloc    - Memori dialokasikan\n", 0x0F);
         kprint("  dealloc  - Memori didealokasikan\n", 0x0F);
+        kprint("  taskdemo - Menjalankan demo multitasking\n", 0x0F);
+        kprint("  usermode - Menjalankan aplikasi di User Mode (Ring 3)\n", 0x0F);
         kprint("  about    - Informasi mengenai sistem operasi ini\n", 0x0F);
         kprint("  help     - Menampilkan daftar perintah ini\n", 0x0F);
         kprint("  shutdown - Mematikan sistem operasi dan hardware\n", 0x0F);
-    } 
+    }
+    else if (string_compare(cmd, "usermode")) {
+        kprint("Menjalankan simulasi User Mode (Ring 3) & Syscall int 0x80...\n", 0x0E);
+        create_task("User_App", user_function);
+        kprint("Aplikasi Ring 3 berhasil dibuat! Berpindah eksekusi...\n", 0x0A);
+        
+        // Pemicu agar scheduler berpindah ke task baru!
+        task_yield(); 
+    }
+    else if (string_compare(cmd, "taskdemo")) {
+        kprint("Membuat 2 background task baru (Task A & Task B)...\n", 0x0E);
+        create_task("Task_A_Worker", task_a);
+        create_task("Task_B_Worker", task_b);
+        kprint("Task A dan Task B berhasil dibuat dan siap dijadwalkan!\n", 0x0A);
+    }
     else if (string_compare(cmd, "ls")) {
         vfs_list_files();
     }
@@ -531,6 +598,10 @@ void kernel_main(struct multiboot_info* mb_info) { // Tambahkan parameter struct
 
     kprint("Inisialisasi Virtual File System (VFS)... ", 0x0F);
     init_vfs();
+    kprint("[ OK ]\n", 0x0A);
+
+    kprint("Inisialisasi Multitasking Subsystem... ", 0x0F);
+    init_multitasking();
     kprint("[ OK ]\n", 0x0A);
 
     kprint("Silakan ketik perintah Anda:\n\n> ", 0x0E);

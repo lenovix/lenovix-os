@@ -7,9 +7,12 @@ LDFLAGS = -m elf_i386 -T linker.ld
 
 all: lenovix.bin
 
-lenovix.bin: boot.o kernel.o idt.o gdt.o timer.o pmm.o heap.o vfs.o
-	x86_64-linux-gnu-ld -m elf_i386 -T linker.ld boot.o kernel.o idt.o gdt.o timer.o pmm.o heap.o vfs.o -o lenovix.bin
+lenovix.bin: boot.o kernel.o idt.o gdt.o timer.o pmm.o heap.o vfs.o task.o
+	x86_64-linux-gnu-ld -m elf_i386 -T linker.ld boot.o kernel.o idt.o gdt.o timer.o pmm.o heap.o vfs.o task.o -o lenovix.bin
 
+task.o: task.c
+	x86_64-linux-gnu-gcc -m32 -c -ffreestanding -O2 -Wall -Wextra task.c -o task.o
+	
 vfs.o: vfs.c
 	x86_64-linux-gnu-gcc -m32 -c -ffreestanding -O2 -Wall -Wextra vfs.c -o vfs.o
 
