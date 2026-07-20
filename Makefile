@@ -2,41 +2,72 @@ CC = x86_64-linux-gnu-gcc
 AS = nasm
 LD = x86_64-linux-gnu-ld
 
-CFLAGS = -m32 -c -ffreestanding -O2 -Wall -Wextra
+# -I src/include memberitahu GCC lokasi folder header (.h)
+CFLAGS = -m32 -c -ffreestanding -O2 -Wall -Wextra -I src/include
 LDFLAGS = -m elf_i386 -T linker.ld
+
+# Daftar semua Object File yang akan dibentuk
+OBJS = boot.o \
+       gdt.o \
+       idt.o \
+       keyboard.o \
+       tty.o \
+       vfs.o \
+       heap.o \
+       kernel.o \
+       pmm.o \
+       task.o \
+       timer.o \
+       shell.o
 
 all: lenovix.bin
 
-lenovix.bin: boot.o kernel.o idt.o gdt.o timer.o pmm.o heap.o vfs.o task.o
-	x86_64-linux-gnu-ld -m elf_i386 -T linker.ld boot.o kernel.o idt.o gdt.o timer.o pmm.o heap.o vfs.o task.o -o lenovix.bin
+# Linker Step
+lenovix.bin: $(OBJS)
+	$(LD) $(LDFLAGS) $(OBJS) -o lenovix.bin
 
-task.o: task.c
-	x86_64-linux-gnu-gcc -m32 -c -ffreestanding -O2 -Wall -Wextra task.c -o task.o
-	
-vfs.o: vfs.c
-	x86_64-linux-gnu-gcc -m32 -c -ffreestanding -O2 -Wall -Wextra vfs.c -o vfs.o
+# --- Arch / x86 ---
+boot.o: src/acrh/x86/boot.asm
+	$(AS) -f elf32 $< -o $@
 
-heap.o: heap.c
-	x86_64-linux-gnu-gcc -m32 -c -ffreestanding -O2 -Wall -Wextra heap.c -o heap.o
+gdt.o: src/acrh/x86/gdt.c
+	$(CC) $(CFLAGS) $< -o $@
 
-pmm.o: pmm.c
-	$(CC) $(CFLAGS) pmm.c -o pmm.o
+idt.o: src/acrh/x86/idt.c
+	$(CC) $(CFLAGS) $< -o $@
 
-boot.o: boot.asm
-	$(AS) -f elf32 boot.asm -o boot.o
+# --- Drivers ---
+keyboard.o: src/drivers/keyboard.c
+	$(CC) $(CFLAGS) $< -o $@
 
-kernel.o: kernel.c
-	$(CC) $(CFLAGS) kernel.c -o kernel.o
+tty.o: src/drivers/tty.c
+	$(CC) $(CFLAGS) $< -o $@
 
-idt.o: idt.c
-	$(CC) $(CFLAGS) idt.c -o idt.o
+# --- File System ---
+vfs.o: src/fs/vfs.c
+	$(CC) $(CFLAGS) $< -o $@
 
-gdt.o: gdt.c
-	$(CC) $(CFLAGS) gdt.c -o gdt.o
+# --- Core Kernel ---
+heap.o: src/kernel/heap.c
+	$(CC) $(CFLAGS) $< -o $@
 
-timer.o: timer.c
-	$(CC) $(CFLAGS) timer.c -o timer.o
+kernel.o: src/kernel/kernel.c
+	$(CC) $(CFLAGS) $< -o $@
 
+pmm.o: src/kernel/pmm.c
+	$(CC) $(CFLAGS) $< -o $@
+
+task.o: src/kernel/task.c
+	$(CC) $(CFLAGS) $< -o $@
+
+timer.o: src/kernel/timer.c
+	$(CC) $(CFLAGS) $< -o $@
+
+# --- Shell ---
+shell.o: src/shell/shell.c
+	$(CC) $(CFLAGS) $< -o $@
+
+# --- Clean & Run ---
 clean:
 	rm -f *.o lenovix.bin
 

@@ -1,0 +1,36 @@
+sudo apt update
+sudo apt install nasm build-essential qemu-system-x86 binutils-x86-64-linux-gnu gcc-x86-64-linux-gnu
+
+make clean && make run
+
+GIT Command:
+git rm --cached -r .vscode
+git commit -m "Remove .vscode tracking"
+
+lenovix-os/
+├── Makefile
+├── linker.ld
+├── .gitignore
+├── docs/                     # Dokumentasi & catatan
+│   ├── note.txt
+│   ├── wiki.txt
+│   └── wikiUser.txt
+└── src/
+    ├── acrh/x86/             # Kode spesifik arsitektur/booting
+    │   ├── boot.asm
+    │   ├── gdt.c
+    │   └── idt.c
+    ├── kernel/               # Core kernel logic & subsystems
+    │   ├── kernel.c          # Entry point murni (kmain)
+    │   ├── pmm.c             # Physical Memory Manager
+    │   ├── heap.c            # Memory Allocation (malloc/kfree)
+    │   ├── task.c            # Scheduler & Tasking
+    │   └── timer.c           # System Timer/PIT
+    ├── fs/                   # File system
+    │   └── vfs.c             # Virtual File System
+    └── include/              # Seluruh Header (.h)
+        ├── multiboot.h
+        ├── heap.h
+        ├── task.h
+        ├── vfs.h
+        └── user.h
