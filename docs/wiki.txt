@@ -30,8 +30,12 @@ Versi 0.5: User Mode & Multitasking (Fokus: Stabilitas OS)
 [x] User Mode (Ring 3) Separation: Memisahkan memori aplikasi agar jika aplikasi crash, kernel utama OS tidak ikut mati.
 [x] System Calls (Syscalls): Mekanisme agar program pengguna bisa meminta layanan ke kernel (seperti print atau read_file).
 
->>> Menuju Versi 1.0: The Graphical Era (GUI):
-[ ] Versi 0.6 (VESA Video Mode): Mengalihkan layar dari mode teks biasa ke mode piksel grafis (VBE - VESA BIOS Extensions) dengan resolusi $800 \times 600$ atau lebih tinggi. Membuat fungsi dasar draw_pixel.
+Versi 0.6
+[x] (VESA Video Mode): Mengalihkan layar dari mode teks biasa ke mode piksel grafis (VBE - VESA BIOS Extensions) dengan resolusi $800 \times 600$ atau lebih tinggi. Membuat fungsi dasar draw_pixel.
+[ ] Mouse Cursor (PS/2 Mouse Driver)
+[ ] Window Manager Sederhana (Movable Windows)
+[ ] Terminal / Shell Emulator di Mode VESA
+
 [ ] Versi 0.7 (Mouse Driver & Shapes): Membuat driver mouse port PS/2 untuk merender kursor panah dan mendeteksi koordinat klik, serta fungsi menggambar kotak/garis.
 [ ] Versi 0.8 (Font Renderer & Window Manager): Membuat sistem untuk menggambar font berbasis matriks piksel dan logika jendela (window window sederhana yang bisa digeser).
 [ ] Versi 0.9 (Desktop & Apps Environment): Membuat antarmuka desktop dasar, taskbar, dan aplikasi bawaan sederhana (seperti text editor atau kalkulator grafis).

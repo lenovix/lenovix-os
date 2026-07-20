@@ -12,6 +12,7 @@ OBJS = boot.o \
        idt.o \
        keyboard.o \
        tty.o \
+	   vesa.o \
        vfs.o \
        heap.o \
        kernel.o \
@@ -37,6 +38,9 @@ idt.o: src/acrh/x86/idt.c
 	$(CC) $(CFLAGS) $< -o $@
 
 # --- Drivers ---
+vesa.o: src/drivers/vesa.c
+	$(CC) $(CFLAGS) $< -o $@
+
 keyboard.o: src/drivers/keyboard.c
 	$(CC) $(CFLAGS) $< -o $@
 
@@ -68,8 +72,20 @@ shell.o: src/shell/shell.c
 	$(CC) $(CFLAGS) $< -o $@
 
 # --- Clean & Run ---
-clean:
-	rm -f *.o lenovix.bin
+lenovix.iso: lenovix.bin
+	mkdir -p iso/boot/grub
+	cp lenovix.bin iso/boot/lenovix.bin
+	echo 'set timeout=0' > iso/boot/grub/grub.cfg
+	echo 'set default=0' >> iso/boot/grub/grub.cfg
+	echo 'menuentry "Lenovix OS" {' >> iso/boot/grub/grub.cfg
+	echo '    multiboot /boot/lenovix.bin' >> iso/boot/grub/grub.cfg
+	echo '    boot' >> iso/boot/grub/grub.cfg
+	echo '}' >> iso/boot/grub/grub.cfg
+	grub-mkrescue -o lenovix.iso iso
 
-run: lenovix.bin
-	qemu-system-i386 -kernel lenovix.bin
+clean:
+	rm -f *.o lenovix.bin lenovix.iso
+	rm -rf iso
+
+run: lenovix.iso
+	qemu-system-i386 -cdrom lenovix.iso -vga std

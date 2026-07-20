@@ -4,6 +4,7 @@
 #include "heap.h"
 #include "task.h"
 #include "user.h"
+#include "vesa.h"
 
 #define HISTORY_MAX 5
 
@@ -142,9 +143,19 @@ void process_command(void) {
         kprint("  alloc    - Memori dialokasikan\n", 0x0F);
         kprint("  dealloc  - Memori didealokasikan\n", 0x0F);
         kprint("  taskdemo - Menjalankan demo multitasking\n", 0x0F);
+        kprint("  vesademo - Menjalankan demo VESA\n", 0x0F);
         kprint("  usermode - Menjalankan aplikasi Ring 3\n", 0x0F);
         kprint("  about    - Informasi OS\n", 0x0F);
         kprint("  shutdown - Mematikan sistem\n", 0x0F);
+    }
+    else if (string_compare(cmd, "vesademo")) {
+        // Bersihkan layar dengan warna biru tua (0x000033)
+        vesa_clear_screen(0x001F3F);
+
+        // Gambar Jendela GUI Sederhana
+        vesa_draw_rect(200, 150, 400, 300, 0xFFFFFF); // Background Putih
+        vesa_draw_rect(200, 150, 400, 30, 0x0074D9);  // Header Biru
+        vesa_draw_rect(560, 155, 30, 20, 0xFF4136);   // Tombol Close Merah
     }
     else if (string_compare(cmd, "usermode")) {
         kprint("Menjalankan simulasi User Mode (Ring 3)...\n", 0x0E);
