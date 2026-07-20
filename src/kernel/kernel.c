@@ -84,26 +84,28 @@ void isr_syscall_handler(unsigned int syscall_num, unsigned int arg1) {
 static window_t main_win;
 
 void render_desktop(mouse_state_t *mouse) {
-    // 1. Clear background
+    // 1. Background Desktop
     vesa_clear_screen(0x001F3F);
 
-    // 2. Draw Window
+    // 2. Draw Window (hanya digambar jika is_visible == 1)
     window_draw(&main_win);
 
     // 3. Taskbar & Start Button
     vesa_draw_rect(0, 728, 1024, 40, 0x111111);
 
-    if (mouse->x >= 5 && mouse->x <= 85 && mouse->y >= 733 && mouse->y <= 763 && mouse->left_button) {
-        vesa_draw_rect(5, 733, 80, 30, 0x2ECC71);
+    int start_btn_hover = (mouse->x >= 5 && mouse->x <= 85 && mouse->y >= 733 && mouse->y <= 763);
+    
+    if (start_btn_hover && mouse->left_button) {
+        vesa_draw_rect(5, 733, 80, 30, 0x2ECC71); // Warna hijau terang saat diklik
     } else {
-        vesa_draw_rect(5, 733, 80, 30, 0x2ECC40); 
+        vesa_draw_rect(5, 733, 80, 30, 0x2ECC40); // Warna hijau normal
     }
     vesa_draw_string(25, 740, "START", 0xFFFFFF);
 
     // 4. Cursor paling depan
     vesa_draw_cursor(mouse->x, mouse->y);
 
-    // 5. Blit instan ke VRAM
+    // 5. Flip ke VRAM
     vesa_update();
 }
 
@@ -118,17 +120,26 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info) {
     mouse_state_t *mouse = mouse_get_state();
     int last_x = -1, last_y = -1;
     unsigned char last_btn = 0;
+    unsigned char prev_start_click = 0;
 
     render_desktop(mouse);
 
     while(1) {
         mouse_handler();
 
-        // Update logika posisi window saat di-drag
+        // 1. Handler untuk Window Drag & Close Button
         window_handle_mouse(&main_win, mouse->x, mouse->y, mouse->left_button);
 
-        // RENDER HANYA BILA POSISI MOUSE / DRAG BERUBAH
-        if (mouse->x != last_x || mouse->y != last_y || mouse->left_button != last_btn) {
+        // 2. Handler untuk Klik Tombol START (Toggle Window)
+        int in_start_btn = (mouse->x >= 5 && mouse->x <= 85 && mouse->y >= 733 && mouse->y <= 763);
+        if (in_start_btn && mouse->left_button && !prev_start_click) {
+            // Toggle status window (buka jika tertutup, atau sebaliknya)
+            main_win.is_visible = !main_win.is_visible;
+        }
+        prev_start_click = (in_start_btn && mouse->left_button);
+
+        // 3. Render ulang jika ada perubahan posisi mouse, status klik, atau status drag
+        if (mouse->x != last_x || mouse->y != last_y || mouse->left_button != last_btn || main_win.is_dragging) {
             last_x = mouse->x;
             last_y = mouse->y;
             last_btn = mouse->left_button;

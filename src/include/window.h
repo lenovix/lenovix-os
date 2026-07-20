@@ -8,6 +8,7 @@ typedef struct {
     int height;
     const char *title;
     unsigned char is_dragging;
+    unsigned char is_visible; // Status apakah window sedang terbuka (1) atau tertutup (0)
     int drag_offset_x;
     int drag_offset_y;
 } window_t;

@@ -34,11 +34,12 @@ Versi 0.6
 [x] (VESA Video Mode): Mengalihkan layar dari mode teks biasa ke mode piksel grafis (VBE - VESA BIOS Extensions) dengan resolusi $800 \times 600$ atau lebih tinggi. Membuat fungsi dasar draw_pixel.
 [x] Mouse Cursor (PS/2 Mouse Driver)
 [x] Double Buffering
-[ ] Window Manager Sederhana (Movable Window / Drag Window) & Optimasi Performa GUI (Membuat Drag Super Smooth)
-[ ] Window Action (Tombol Close X Functionality)
+[x] Window Manager Sederhana (Movable Window / Drag Window) & Optimasi Performa GUI (Membuat Drag Super Smooth)
+[x] Window Action (Tombol Close X & Toggle Window)
 [ ] Start Menu / Pop-up Menu
 [ ] Terminal / Shell Emulator di Mode VESA
 [ ] Multi-Window Support
+[ ] Komponen UI Interaktif (Tombol / Form Text) [Button Widget dan Text Input]
 
 [ ] Versi 0.7 (Mouse Driver & Shapes): Membuat driver mouse port PS/2 untuk merender kursor panah dan mendeteksi koordinat klik, serta fungsi menggambar kotak/garis.
 [ ] Versi 0.8 (Font Renderer & Window Manager): Membuat sistem untuk menggambar font berbasis matriks piksel dan logika jendela (window window sederhana yang bisa digeser).
