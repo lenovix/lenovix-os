@@ -35,6 +35,8 @@ Versi 0.6
 [x] Mouse Cursor (PS/2 Mouse Driver)
 [x] Double Buffering
 [ ] Window Manager Sederhana (Movable Windows)
+[ ] Window Action (Tombol Close X Functionality)
+[ ] Start Menu / Pop-up Menu
 [ ] Terminal / Shell Emulator di Mode VESA
 
 [ ] Versi 0.7 (Mouse Driver & Shapes): Membuat driver mouse port PS/2 untuk merender kursor panah dan mendeteksi koordinat klik, serta fungsi menggambar kotak/garis.
