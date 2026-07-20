@@ -1,4 +1,4 @@
 >> User Space
-[ ] Membuat Wrapper Library (libc Sederhana)
+[x] Membuat Wrapper Library (libc Sederhana)
 [ ] Menambahkan Syscall Baru (Contoh: Membaca Tombol / Input)
 [ ] Membangun Program Game Teks Sederhana di Ring 3

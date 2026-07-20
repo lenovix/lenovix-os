@@ -2,6 +2,7 @@
 #include "heap.h"
 #include "vfs.h"
 #include "task.h"
+#include "user.h"
 
 int cursor_x = 0;
 int cursor_y = 0;
@@ -30,6 +31,8 @@ extern unsigned int pmm_get_max_blocks(void);
 char history[HISTORY_MAX][256];
 int history_count = 0;
 int history_index = -1; // -1 artinya sedang mengetik perintah baru
+
+volatile char last_ascii_char = 0;
 
 // Memisahkan string berdasarkan spasi pertama
 void parse_command(const char *input, char *cmd, char *arg) {
@@ -180,17 +183,40 @@ void task_b(void) {
     }
 }
 
+// Ambil 1 karakter dari buffer keyboard (return 0 jika belum ada tombol ditekan)
+char get_last_key(void) {
+    // Sesuaikan dengan variabel buffer keyboard Anda
+    
+    char c = last_ascii_char;
+    last_ascii_char = 0; // Reset setelah dibaca
+    return c;
+}
+
 // Handler System Call sederhananya
 void isr_syscall_handler(unsigned int syscall_num, unsigned int arg1) {
     switch (syscall_num) {
-        case 1: // Syscall 1: Print String dari User Mode
-            kprint("[Syscall Print] Teks dari User Mode: ", 0x0E);
+        case 1: // Syscall 1: Print String
             kprint((char *)arg1, 0x0B);
-            kprint("\n", 0x0F);
             break;
+
         case 2: // Syscall 2: Exit Task
-            kprint("[Syscall Exit] Task Ring 3 selesai dijalankan.\n", 0x0C);
+            kprint("\n[Kernel] Task User Mode telah selesai dan keluar.\n", 0x0C);
             break;
+
+        case 3: { // Syscall 3: Read Key / Character
+            // Tunggu (poll/block) sampai ada tombol ditekan
+            char c = 0;
+            while ((c = get_last_key()) == 0) {
+                // Beri napas ke CPU/Scheduler saat menunggu input
+                task_yield(); 
+            }
+            
+            // Simpan karakter yang didapat ke pointer yang dikirim dari user space
+            char *out_char = (char *)arg1;
+            *out_char = c;
+            break;
+        }
+
         default:
             kprint("Syscall tidak dikenal!\n", 0x0C);
             break;
@@ -199,19 +225,18 @@ void isr_syscall_handler(unsigned int syscall_num, unsigned int arg1) {
 
 // Fungsi sederhana yang seolah-olah berjalan di User Space (Ring 3)
 void user_function(void) {
-    // Panggil Syscall 1 untuk cetak teks dari Ring 3
-    char *msg = "Halo dari Ring 3 (User Space)!";
+    sys_print("\n=== APLIKASI USER MODE INTERAKTIF ===\n");
+    sys_print("Tekan sebarang tombol di keyboard Anda: ");
 
-    __asm__ __volatile__ (
-        "int $0x80"
-        : 
-        : "a"(1), "b"(msg)
-    );
+    // Meminta input via Syscall 3
+    char key = sys_getkey();
 
-    // (Opsional) Panggil Syscall Exit jika sudah punya
-    // __asm__ __volatile__ ("int $0x80" : : "a"(2));
+    sys_print("\n[User Space] Anda menekan tombol: ");
+    sys_putchar(key);
+    sys_print("\n=====================================\n");
 
-    while(1); // Keep alive
+    sys_exit();
+    while(1);
 }
 
 void process_command(void) {
