@@ -15,6 +15,7 @@ OBJS = boot.o \
 	   vesa.o \
 	   mouse.o \
 	   window.o \
+	   menu.o \
        vfs.o \
        heap.o \
        kernel.o \
@@ -30,16 +31,19 @@ lenovix.bin: $(OBJS)
 	$(LD) $(LDFLAGS) $(OBJS) -o lenovix.bin
 
 # --- Arch / x86 ---
-boot.o: src/acrh/x86/boot.asm
+boot.o: src/arch/x86/boot.asm
 	$(AS) -f elf32 $< -o $@
 
-gdt.o: src/acrh/x86/gdt.c
+gdt.o: src/arch/x86/gdt.c
 	$(CC) $(CFLAGS) $< -o $@
 
-idt.o: src/acrh/x86/idt.c
+idt.o: src/arch/x86/idt.c
 	$(CC) $(CFLAGS) $< -o $@
 
 # --- Drivers ---
+menu.o: src/drivers/menu.c
+	$(CC) $(CFLAGS) $< -o $@
+
 window.o: src/drivers/window.c
 	$(CC) $(CFLAGS) $< -o $@
 

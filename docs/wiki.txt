@@ -36,7 +36,7 @@ Versi 0.6
 [x] Double Buffering
 [x] Window Manager Sederhana (Movable Window / Drag Window) & Optimasi Performa GUI (Membuat Drag Super Smooth)
 [x] Window Action (Tombol Close X & Toggle Window)
-[ ] Start Menu / Pop-up Menu
+[x] Start Menu / Pop-up Menu
 [ ] Terminal / Shell Emulator di Mode VESA
 [ ] Multi-Window Support
 [ ] Komponen UI Interaktif (Tombol / Form Text) [Button Widget dan Text Input]

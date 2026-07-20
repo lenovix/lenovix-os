@@ -154,3 +154,5 @@ switch_to_task:
 
     popa                ; Pop 8 general registers
     iret                ; Jump & Restore EIP, CS, EFLAGS
+
+section .note.GNU-stack noalloc noexec nowrite progbits
