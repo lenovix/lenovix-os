@@ -1,5 +1,8 @@
 #include "window.h"
 #include "vesa.h"
+#include "terminal.h"
+
+extern terminal_t main_term;
 
 void window_init(window_t *win, int x, int y, int w, int h, const char *title) {
     win->x = x;
@@ -14,11 +17,10 @@ void window_init(window_t *win, int x, int y, int w, int h, const char *title) {
 }
 
 void window_draw(window_t *win) {
-    // Jika window tertutup/tersembunyi, jangan digambar
     if (!win->is_visible) return;
 
-    // 1. Body Window (Putih)
-    vesa_draw_rect(win->x, win->y, win->width, win->height, 0xFFFFFF);
+    // 1. Body Window (Abu-abu Gelap Outer)
+    vesa_draw_rect(win->x, win->y, win->width, win->height, 0xC6C6C6);
 
     // 2. Title Bar (Biru)
     vesa_draw_rect(win->x, win->y, win->width, 30, 0x0074D9);
@@ -30,9 +32,8 @@ void window_draw(window_t *win) {
     // 4. Judul Window
     vesa_draw_string(win->x + 10, win->y + 7, win->title, 0xFFFFFF);
 
-    // 5. Isi Window
-    vesa_draw_string(win->x + 20, win->y + 50, "Selamat Datang di Lenovix OS!", 0x000000);
-    vesa_draw_string(win->x + 20, win->y + 80, "Klik X merah untuk menutup.", 0x000000);
+    // 5. Render Isi Terminal Aplikasi di dalam Window
+    terminal_draw(&main_term, win->x, win->y);
 }
 
 void window_handle_mouse(window_t *win, int mouse_x, int mouse_y, unsigned char left_btn) {

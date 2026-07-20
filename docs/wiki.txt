@@ -40,6 +40,7 @@ Versi 0.6
 [ ] Terminal / Shell Emulator di Mode VESA
 [ ] Multi-Window Support
 [ ] Komponen UI Interaktif (Tombol / Form Text) [Button Widget dan Text Input]
+[ ] GUI Desktop Accessories (Jam/Waktu RTC & Desktop Wallpaper)
 
 [ ] Versi 0.7 (Mouse Driver & Shapes): Membuat driver mouse port PS/2 untuk merender kursor panah dan mendeteksi koordinat klik, serta fungsi menggambar kotak/garis.
 [ ] Versi 0.8 (Font Renderer & Window Manager): Membuat sistem untuk menggambar font berbasis matriks piksel dan logika jendela (window window sederhana yang bisa digeser).
