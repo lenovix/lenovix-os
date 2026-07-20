@@ -81,10 +81,10 @@ void isr_syscall_handler(unsigned int syscall_num, unsigned int arg1) {
 // }
 
 void render_desktop(mouse_state_t *mouse) {
-    // 1. Clear & Redraw Background Desktop
+    // 1. Gambar ke Back Buffer di RAM
     vesa_clear_screen(0x001F3F);
 
-    // 2. Window Utama
+    // Window Utama
     vesa_draw_rect(300, 200, 400, 250, 0xFFFFFF); 
     vesa_draw_rect(300, 200, 400, 30, 0x0074D9);
     vesa_draw_rect(665, 205, 30, 20, 0xFF4136);
@@ -94,19 +94,21 @@ void render_desktop(mouse_state_t *mouse) {
     vesa_draw_string(320, 250, "Selamat Datang di Lenovix OS!", 0x000000);
     vesa_draw_string(320, 280, "Mode VESA VBE 1024x768 Active", 0x000000);
 
-    // 3. Taskbar & Button
+    // Taskbar & Button
     vesa_draw_rect(0, 728, 1024, 40, 0x111111);
     
-    // Jika tombol kiri mouse ditekan di atas Tombol START, ganti warna jadi hijau muda
     if (mouse->x >= 5 && mouse->x <= 85 && mouse->y >= 733 && mouse->y <= 763 && mouse->left_button) {
-        vesa_draw_rect(5, 733, 80, 30, 0x2ECC71); // Highlight saat diklik
+        vesa_draw_rect(5, 733, 80, 30, 0x2ECC71); // Highlight hijau terang saat diklik
     } else {
         vesa_draw_rect(5, 733, 80, 30, 0x2ECC40); 
     }
     vesa_draw_string(25, 740, "START", 0xFFFFFF);
 
-    // 4. Render Kursor Mouse paling atas
+    // Render Kursor Mouse
     vesa_draw_cursor(mouse->x, mouse->y);
+
+    // 2. SALIN SAMPAI SELESAI KE LAYAR VRAM REAL!
+    vesa_update();
 }
 
 void kernel_main(unsigned int magic, multiboot_info_t *mb_info) {
@@ -117,18 +119,18 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info) {
 
     mouse_state_t *mouse = mouse_get_state();
     int last_x = -1, last_y = -1;
+    unsigned char last_btn = 0;
 
-    // Initial render
     render_desktop(mouse);
 
     while(1) {
-        // Polling paket data dari mouse
         mouse_handler();
 
-        // Hanya gambar ulang layar jika mouse bergerak atau tombol klik berubah
-        if (mouse->x != last_x || mouse->y != last_y || mouse->left_button) {
+        // Render ulang hanya jika mouse bergerak atau status klik berubah
+        if (mouse->x != last_x || mouse->y != last_y || mouse->left_button != last_btn) {
             last_x = mouse->x;
             last_y = mouse->y;
+            last_btn = mouse->left_button;
             render_desktop(mouse);
         }
     }

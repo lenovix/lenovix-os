@@ -1,10 +1,58 @@
 #include "vesa.h"
 
-static unsigned int *framebuffer = 0;
-static unsigned int width = 0;
-static unsigned int height = 0;
-static unsigned int pitch = 0; // Bytes per line
+static unsigned int *vram = 0;           // VRAM Kartu Grafis Asli
+static unsigned int back_buffer[1024 * 768]; // Back Buffer di RAM (3.1 MB)
+static unsigned int width = 1024;
+static unsigned int height = 768;
+static unsigned int pitch = 0;
 static unsigned char bpp = 0;
+
+// Memory Copy Helper bawaan C
+static void *custom_memcpy(void *dest, const void *src, unsigned int n) {
+    char *d = dest;
+    const char *s = src;
+    while (n--) *d++ = *s++;
+    return dest;
+}
+
+void init_vesa(multiboot_info_t *mb_info) {
+    if (mb_info->flags & (1 << 12)) {
+        vram = (unsigned int *)(unsigned long)mb_info->framebuffer_addr;
+        width = mb_info->framebuffer_width;
+        height = mb_info->framebuffer_height;
+        pitch = mb_info->framebuffer_pitch;
+        bpp = mb_info->framebuffer_bpp;
+    }
+}
+
+// Sekarang kita gambar ke back_buffer, BUKAN ke vram
+void vesa_put_pixel(int x, int y, unsigned int color) {
+    if (x < 0 || (unsigned int)x >= width || y < 0 || (unsigned int)y >= height) {
+        return;
+    }
+    back_buffer[y * width + x] = color;
+}
+
+void vesa_clear_screen(unsigned int color) {
+    for (unsigned int i = 0; i < width * height; i++) {
+        back_buffer[i] = color;
+    }
+}
+
+void vesa_draw_rect(int x, int y, int w, int h, unsigned int color) {
+    for (int i = y; i < y + h; i++) {
+        for (int j = x; j < x + w; j++) {
+            vesa_put_pixel(j, i, color);
+        }
+    }
+}
+
+// Pindahkan semua pixel dari Back Buffer RAM ke VRAM Asli sekaligus
+void vesa_update(void) {
+    if (vram) {
+        custom_memcpy(vram, back_buffer, width * height * sizeof(unsigned int));
+    }
+}
 
 // Font VGA 8x16 Bitmap Lengkap untuk Karakter yang Digunakan
 static const unsigned char font_8x16[128][16] = {
@@ -57,40 +105,6 @@ static const unsigned char font_8x16[128][16] = {
     ['x'] = {0x00, 0x00, 0x00, 0x00, 0xC6, 0x6C, 0x38, 0x38, 0x6C, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
     [' '] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 };
-
-void init_vesa(multiboot_info_t *mb_info) {
-    if (mb_info->flags & (1 << 12)) {
-        framebuffer = (unsigned int *)(unsigned long)mb_info->framebuffer_addr;
-        width = mb_info->framebuffer_width;
-        height = mb_info->framebuffer_height;
-        pitch = mb_info->framebuffer_pitch;
-        bpp = mb_info->framebuffer_bpp;
-    }
-}
-
-void vesa_put_pixel(int x, int y, unsigned int color) {
-    if (x < 0 || (unsigned int)x >= width || y < 0 || (unsigned int)y >= height) {
-        return;
-    }
-    unsigned int location = y * (pitch / (bpp / 8)) + x;
-    framebuffer[location] = color;
-}
-
-void vesa_clear_screen(unsigned int color) {
-    for (unsigned int y = 0; y < height; y++) {
-        for (unsigned int x = 0; x < width; x++) {
-            vesa_put_pixel(x, y, color);
-        }
-    }
-}
-
-void vesa_draw_rect(int x, int y, int w, int h, unsigned int color) {
-    for (int i = y; i < y + h; i++) {
-        for (int j = x; j < x + w; j++) {
-            vesa_put_pixel(j, i, color);
-        }
-    }
-}
 
 void vesa_draw_char(int x, int y, char c, unsigned int color) {
     unsigned char uc = (unsigned char)c;

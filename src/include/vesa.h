@@ -11,5 +11,6 @@ void vesa_clear_screen(unsigned int color);
 void vesa_draw_rect(int x, int y, int width, int height, unsigned int color);
 void vesa_draw_char(int x, int y, char c, unsigned int color);
 void vesa_draw_string(int x, int y, const char *str, unsigned int color);
+void vesa_update(void);
 
 #endif
