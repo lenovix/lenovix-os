@@ -26,9 +26,9 @@ Versi 0.4: Storage & Filesystem (Fokus: Data)
 [x] Virtual File System (VFS) / FAT12/16: Implementasi sistem file sederhana agar Lenovix OS bisa membaca folder dan mengeksekusi file teks (.txt).
 
 Versi 0.5: User Mode & Multitasking (Fokus: Stabilitas OS)
-[ ] Multitasking/Task Switching: Kemampuan OS untuk menjalankan dua proses/looping secara bersamaan (simulasi threads).
-[ ] User Mode (Ring 3) Separation: Memisahkan memori aplikasi agar jika aplikasi crash, kernel utama OS tidak ikut mati.
-[ ] System Calls (Syscalls): Mekanisme agar program pengguna bisa meminta layanan ke kernel (seperti print atau read_file).
+[x] Multitasking/Task Switching: Kemampuan OS untuk menjalankan dua proses/looping secara bersamaan (simulasi threads).
+[x] User Mode (Ring 3) Separation: Memisahkan memori aplikasi agar jika aplikasi crash, kernel utama OS tidak ikut mati.
+[x] System Calls (Syscalls): Mekanisme agar program pengguna bisa meminta layanan ke kernel (seperti print atau read_file).
 
 >>> Menuju Versi 1.0: The Graphical Era (GUI):
 [ ] Versi 0.6 (VESA Video Mode): Mengalihkan layar dari mode teks biasa ke mode piksel grafis (VBE - VESA BIOS Extensions) dengan resolusi $800 \times 600$ atau lebih tinggi. Membuat fungsi dasar draw_pixel.
