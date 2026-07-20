@@ -1,5 +1,6 @@
 #include "multiboot.h"
 #include "heap.h"
+#include "vfs.h"
 
 int cursor_x = 0;
 int cursor_y = 0;
@@ -28,6 +29,29 @@ extern unsigned int pmm_get_max_blocks(void);
 char history[HISTORY_MAX][256];
 int history_count = 0;
 int history_index = -1; // -1 artinya sedang mengetik perintah baru
+
+// Memisahkan string berdasarkan spasi pertama
+void parse_command(const char *input, char *cmd, char *arg) {
+    int i = 0, j = 0;
+    
+    // Ambil kata pertama (perintah)
+    while (input[i] != ' ' && input[i] != '\0') {
+        cmd[i] = input[i];
+        i++;
+    }
+    cmd[i] = '\0';
+
+    if (input[i] == ' ') {
+        i++;
+        // Ambil sisa teks sebagai argumen
+        while (input[i] != '\0') {
+            arg[j] = input[i];
+            i++;
+            j++;
+        }
+    }
+    arg[j] = '\0';
+}
 
 int string_compare(const char *str1, const char *str2) {
     int i = 0;
@@ -79,20 +103,23 @@ void scroll(void) {
 }
 
 void kprint_char(char c, char color) {
-    if (c == '\b') {
+    if (c == '\n') {
+        cursor_x = 0;
+        cursor_y++;
+    } 
+    // --- TAMBAHKAN PENANGANAN TAB (\t) DI SINI ---
+    else if (c == '\t') {
+        // Tab akan memindahkan kursor ke kelipatan 4 spasi berikutnya
+        cursor_x = (cursor_x + 4) & ~3; 
+    }
+    // ---------------------------------------------
+    else if (c == '\b') {
         if (cursor_x > 2) {
             cursor_x--;
             int index = (cursor_y * VGA_WIDTH + cursor_x) * 2;
             video_memory[index] = ' ';
             video_memory[index + 1] = color;
         }
-        update_hardware_cursor();
-        return;
-    }
-
-    if (c == '\n') {
-        cursor_x = 0;
-        cursor_y++;
     } else {
         int index = (cursor_y * VGA_WIDTH + cursor_x) * 2;
         video_memory[index] = c;
@@ -165,8 +192,16 @@ void process_command(void) {
     }
     history_index = -1; // Reset index history setelah ditekan Enter
 
+    char cmd[32];
+    char arg[224];
+    parse_command(command_buffer, cmd, arg);
+
     if (string_compare(command_buffer, "help")) {
         kprint("Perintah Lenovix OS yang tersedia:\n", 0x0E);
+        kprint("  ls       - Menampilkan daftar berkas/file\n", 0x0F);
+        kprint("  cat      - Membaca isi berkas (contoh: cat readme.txt)\n", 0x0F);
+        kprint("  touch    - Membuat berkas baru (contoh: touch cth.txt)\n", 0x0F);
+        kprint("  write    - Menulis ke berkas (contoh: write cth.txt \"Hello, World!\")\n", 0x0F);
         kprint("  free     - Menampilkan informasi memori\n", 0x0F);
         kprint("  uptime   - Menampilkan durasi aktif sistem operasi\n", 0x0F);
         kprint("  clear    - Membersihkan layar shell\n", 0x0F);
@@ -176,6 +211,72 @@ void process_command(void) {
         kprint("  help     - Menampilkan daftar perintah ini\n", 0x0F);
         kprint("  shutdown - Mematikan sistem operasi dan hardware\n", 0x0F);
     } 
+    else if (string_compare(cmd, "ls")) {
+        vfs_list_files();
+    }
+    else if (string_compare(cmd, "cat")) {
+        if (arg[0] == '\0') {
+            kprint("Gunakan: cat <nama_file>\n", 0x0C);
+        } else {
+            vfs_node_t *file = vfs_find_file(arg);
+            if (file != NULL) {
+                kprint(file->data, 0x0B);
+                kprint("\n", 0x0F);
+            } else {
+                kprint("Berkas tidak ditemukan!\n", 0x0C);
+            }
+        }
+    }
+    else if (string_compare(cmd, "touch")) {
+        if (arg[0] == '\0') {
+            kprint("Gunakan: touch <nama_file>\n", 0x0C);
+        } else {
+            int res = vfs_create_file(arg, "Berkas baru kosong.");
+            if (res == 0) {
+                kprint("Berkas berhasil dibuat!\n", 0x0A);
+            } else if (res == -2) {
+                kprint("Berkas dengan nama tersebut sudah ada!\n", 0x0C);
+            } else {
+                kprint("Gagal membuat berkas!\n", 0x0C);
+            }
+        }
+    }
+    else if (string_compare(cmd, "write")) {
+        if (arg[0] == '\0') {
+            kprint("Gunakan: write <nama_file> <teks_baru>\n", 0x0C);
+        } else {
+            // Pisahkan argumen menjadi nama file dan isi teksnya
+            char filename[32];
+            char content[192];
+            parse_command(arg, filename, content);
+
+            if (content[0] == '\0') {
+                kprint("Gunakan: write <nama_file> <teks_baru>\n", 0x0C);
+            } else {
+                vfs_node_t *file = vfs_find_file(filename);
+                if (file != NULL) {
+                    // Bebaskan memori lama
+                    if (file->data != NULL) {
+                        kfree(file->data);
+                    }
+                    
+                    // Hitung panjang teks baru & alokasikan memori baru di Heap
+                    int new_len = 0;
+                    while (content[new_len] != '\0') new_len++;
+
+                    file->data = (char *)kmalloc(new_len + 1);
+                    for (int i = 0; i <= new_len; i++) {
+                        file->data[i] = content[i];
+                    }
+                    file->length = new_len;
+
+                    kprint("Berhasil menulis ke berkas!\n", 0x0A);
+                } else {
+                    kprint("Berkas tidak ditemukan! Buat dulu dengan 'touch'.\n", 0x0C);
+                }
+            }
+        }
+    }
     else if (string_compare(command_buffer, "about")) {
         kprint("Lenovix OS v0.1\n", 0x0A);
         kprint("Sebuah proyek sistem operasi buatan anak bangsa.\n", 0x0B);
@@ -426,6 +527,10 @@ void kernel_main(struct multiboot_info* mb_info) { // Tambahkan parameter struct
 
     kprint("Inisialisasi Dynamic Heap Allocator (kmalloc)... ", 0x0F);
     init_heap();
+    kprint("[ OK ]\n", 0x0A);
+
+    kprint("Inisialisasi Virtual File System (VFS)... ", 0x0F);
+    init_vfs();
     kprint("[ OK ]\n", 0x0A);
 
     kprint("Silakan ketik perintah Anda:\n\n> ", 0x0E);
