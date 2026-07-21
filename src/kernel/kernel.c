@@ -129,7 +129,11 @@ void render_desktop(mouse_state_t *mouse) {
     vesa_update();
 }
 
+terminal_t active_terminal;
+
 void kernel_main(unsigned int magic, multiboot_info_t *mb_info) {
+    terminal_init(&active_terminal);
+
     (void)magic;
 
     init_vesa(mb_info);
