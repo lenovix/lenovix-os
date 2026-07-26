@@ -1,15 +1,16 @@
 #include "keyboard.h"
 #include "tty.h"
+#include "terminal.h"
 
 extern unsigned char inb(unsigned short port);
 extern void outb(unsigned short port, unsigned char data);
 
 volatile char last_ascii_char = 0;
 
-// Import dari shell untuk interaksi dengan command buffer & history
-extern char command_buffer[256];
-extern int command_index;
-extern void process_command(void);
+// Instance terminal aktif (dihubungkan dari sistem OS utama)
+extern terminal_t active_terminal;
+
+// Import fungsi pendukung history dari shell jika diperlukan
 extern void handle_history_up(void);
 extern void handle_history_down(void);
 
@@ -40,9 +41,10 @@ char get_last_key(void) {
 void keyboard_handler_c(void) {
     unsigned char scancode = inb(0x60);
 
+    // Handle Extended Scancodes (misal: Arrow keys)
     if (scancode == 0xE0) {
         is_extended = 1;
-        outb(0x20, 0x20);
+        outb(0x20, 0x20); // Send EOI to PIC
         return;
     }
 
@@ -54,10 +56,11 @@ void keyboard_handler_c(void) {
         return;
     }
 
+    // Toggle Modifier Keys
     if (scancode == 0x2A || scancode == 0x36) shift_pressed = 1;
     else if (scancode == 0xAA || scancode == 0xB6) shift_pressed = 0;
     else if (scancode == 0x3A) caps_lock_active = !caps_lock_active;
-    else if (scancode < 0x80) {
+    else if (scancode < 0x80) { // Key Press Event
         unsigned char ascii = 0;
         int is_letter = (scancode >= 0x10 && scancode <= 0x19) ||
                         (scancode >= 0x1E && scancode <= 0x26) ||
@@ -71,23 +74,12 @@ void keyboard_handler_c(void) {
         }
         
         if (ascii != 0) {
-            last_ascii_char = ascii; // Update last key for syscall
-            if (ascii == '\n') {
-                process_command();
-            } else if (ascii == '\b') {
-                if (command_index > 0) {
-                    command_index--;
-                    kprint_char(ascii, 0x0F);
-                }
-            } else {
-                if (command_index < 255) {
-                    command_buffer[command_index] = ascii;
-                    command_index++;
-                    kprint_char(ascii, 0x0F);
-                }
-            }
+            last_ascii_char = ascii;
+            
+            // Teruskan input tombol langsung ke terminal VESA aktif
+            terminal_handle_key(&active_terminal, ascii);
         }
     }
 
-    outb(0x20, 0x20);
+    outb(0x20, 0x20); // Send EOI to PIC
 }

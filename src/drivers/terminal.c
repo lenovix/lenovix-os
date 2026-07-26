@@ -1,5 +1,8 @@
 #include "terminal.h"
 #include "vesa.h"
+#include "keyboard.h"
+
+// terminal_t active_terminal;
 
 // Helper sederhana untuk membandingkan string
 static int str_equals(const char *s1, const char *s2) {
@@ -10,15 +13,33 @@ static int str_equals(const char *s1, const char *s2) {
     return *(unsigned char *)s1 - *(unsigned char *)s2 == 0;
 }
 
-// Helper untuk menyalin string
-static void str_copy(char *dest, const char *src) {
-    while (*src) {
-        *dest++ = *src++;
+// Helper untuk menambahkan teks ke baris baru di buffer terminal
+void terminal_write_line(terminal_t *term, const char *text) {
+    if (!term) return;
+
+    // Jika baris sudah penuh, geser semua baris ke atas (Auto-scrolling)
+    if (term->cursor_row >= TERM_ROWS) {
+        for (int r = 0; r < TERM_ROWS - 1; r++) {
+            for (int c = 0; c < TERM_COLS; c++) {
+                term->buffer[r][c] = term->buffer[r + 1][c];
+            }
+        }
+        term->cursor_row = TERM_ROWS - 1;
     }
-    *dest = '\0';
+
+    // Salin string baru ke baris aktif
+    int c = 0;
+    while (text[c] != '\0' && c < TERM_COLS - 1) {
+        term->buffer[term->cursor_row][c] = text[c];
+        c++;
+    }
+    term->buffer[term->cursor_row][c] = '\0';
+    term->cursor_row++;
 }
 
 void terminal_init(terminal_t *term) {
+    if (!term) return;
+
     for (int r = 0; r < TERM_ROWS; r++) {
         for (int c = 0; c < TERM_COLS; c++) {
             term->buffer[r][c] = '\0';
@@ -33,33 +54,20 @@ void terminal_init(terminal_t *term) {
     terminal_write_line(term, "Ketik 'help' untuk daftar perintah.");
 }
 
-void terminal_write_line(terminal_t *term, const char *str) {
-    // Jika baris penuh, scroll ke atas 1 baris
-    if (term->cursor_row >= TERM_ROWS) {
-        for (int r = 0; r < TERM_ROWS - 1; r++) {
-            str_copy(term->buffer[r], term->buffer[r + 1]);
-        }
-        for (int c = 0; c < TERM_COLS; c++) {
-            term->buffer[TERM_ROWS - 1][c] = '\0';
-        }
-        term->cursor_row = TERM_ROWS - 1;
-    }
-
-    str_copy(term->buffer[term->cursor_row], str);
-    term->cursor_row++;
-}
-
 static void terminal_execute_command(terminal_t *term) {
-    char line[60];
+    if (!term) return;
+
+    char line[TERM_COLS];
     line[0] = '>';
     line[1] = ' ';
     line[2] = '\0';
-    
-    // Tampilkan perintah yang diketik user ke history
-    for (int i = 0; i < term->input_len && i < 35; i++) {
+
+    // Tampilkan perintah yang diketik user ke history terminal
+    int i = 0;
+    for (i = 0; i < term->input_len && i < (TERM_COLS - 3); i++) {
         line[i + 2] = term->input_buf[i];
-        line[i + 3] = '\0';
     }
+    line[i + 2] = '\0';
     terminal_write_line(term, line);
 
     // Proses Perintah
@@ -86,6 +94,8 @@ static void terminal_execute_command(terminal_t *term) {
 }
 
 void terminal_handle_key(terminal_t *term, char c) {
+    if (!term) return;
+
     if (c == '\n') { // Tombol Enter
         terminal_execute_command(term);
     } else if (c == '\b') { // Tombol Backspace
@@ -103,6 +113,8 @@ void terminal_handle_key(terminal_t *term, char c) {
 }
 
 void terminal_draw(terminal_t *term, int win_x, int win_y) {
+    if (!term) return;
+
     // Area dalam Window (Background Hitam Terminal)
     int term_x = win_x + 10;
     int term_y = win_y + 35;
@@ -124,7 +136,7 @@ void terminal_draw(terminal_t *term, int win_x, int win_y) {
         vesa_draw_string(term_x + 5, prompt_y, ">", 0x00FF00);
         vesa_draw_string(term_x + 20, prompt_y, term->input_buf, 0xFFFFFF);
 
-        // Kursor Kedip sederhanakan dengan kursor blok (_)
+        // Kursor blok (_) di ujung input
         int cursor_x = term_x + 20 + (term->input_len * 8);
         vesa_draw_string(cursor_x, prompt_y, "_", 0x00FF00);
     }
