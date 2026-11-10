@@ -80,7 +80,6 @@ global load_idt
 load_idt:
     mov edx, [esp + 4] ; Ambil argumen pertama (alamat IDT pointer) dari stack
     lidt [edx]         ; Jalankan instruksi Load IDT
-    sti                ; Aktifkan interupsi global
     ret
 
 extern keyboard_handler_c
@@ -91,6 +90,15 @@ keyboard_handler_asm:
     call keyboard_handler_c ; Panggil fungsi utama driver keyboard
     popa               ; Kembalikan semua register
     iret               ; Interrupt Return
+
+extern mouse_handler_c
+
+global mouse_handler_asm
+mouse_handler_asm:
+    pusha
+    call mouse_handler_c
+    popa
+    iret
 
 extern default_handler_c
 
@@ -115,6 +123,12 @@ gdt_flush:
     mov fs, ax
     mov gs, ax
     mov ss, ax
+    ret
+
+global tss_flush
+tss_flush:
+    mov ax, 0x28 | 3    ; TSS Selector 0x28, RPL 3
+    ltr ax
     ret
 
 extern timer_handler_c
@@ -154,5 +168,106 @@ switch_to_task:
 
     popa                ; Pop 8 general registers
     iret                ; Jump & Restore EIP, CS, EFLAGS
+
+global jump_to_user_mode
+; void jump_to_user_mode(void (*user_func)(void), unsigned int user_stack);
+jump_to_user_mode:
+    cli
+    mov edx, [esp + 4]   ; entry point
+    mov ecx, [esp + 8]   ; user stack top
+
+    mov ax, 0x23         ; User data selector (0x20 | 3)
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+
+    push 0x23            ; SS
+    push ecx             ; ESP
+    pushfd
+    pop eax
+    or eax, 0x200        ; EFLAGS IF=1
+    push eax
+    push 0x1B            ; CS (0x18 | 3)
+    push edx             ; EIP
+    iret
+
+; =========================================================================
+; ISR 0-31 CPU EXCEPTION STUBS
+; =========================================================================
+%macro ISR_NOERRCODE 1
+global isr%1
+isr%1:
+    push 0
+    push %1
+    jmp isr_common_stub
+%endmacro
+
+%macro ISR_ERRCODE 1
+global isr%1
+isr%1:
+    push %1
+    jmp isr_common_stub
+%endmacro
+
+ISR_NOERRCODE 0
+ISR_NOERRCODE 1
+ISR_NOERRCODE 2
+ISR_NOERRCODE 3
+ISR_NOERRCODE 4
+ISR_NOERRCODE 5
+ISR_NOERRCODE 6
+ISR_NOERRCODE 7
+ISR_ERRCODE   8
+ISR_NOERRCODE 9
+ISR_ERRCODE   10
+ISR_ERRCODE   11
+ISR_ERRCODE   12
+ISR_ERRCODE   13
+ISR_ERRCODE   14
+ISR_NOERRCODE 15
+ISR_NOERRCODE 16
+ISR_ERRCODE   17
+ISR_NOERRCODE 18
+ISR_NOERRCODE 19
+ISR_NOERRCODE 20
+ISR_NOERRCODE 21
+ISR_NOERRCODE 22
+ISR_NOERRCODE 23
+ISR_NOERRCODE 24
+ISR_NOERRCODE 25
+ISR_NOERRCODE 26
+ISR_NOERRCODE 27
+ISR_NOERRCODE 28
+ISR_NOERRCODE 29
+ISR_ERRCODE   30
+ISR_NOERRCODE 31
+
+extern isr_exception_handler
+
+isr_common_stub:
+    pusha
+    push ds
+    push es
+    push fs
+    push gs
+
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+
+    push esp
+    call isr_exception_handler
+    add esp, 4
+
+    pop gs
+    pop fs
+    pop es
+    pop ds
+    popa
+    add esp, 8
+    iret
 
 section .note.GNU-stack noalloc noexec nowrite progbits

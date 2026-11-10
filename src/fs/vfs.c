@@ -194,3 +194,15 @@ void vfs_write_file_cmd(const char *filename, const char *content)
     kprint(filename, 0x0B);
     kprint("\n", 0x0F);
 }
+
+int vfs_get_count(void)
+{
+    return file_count;
+}
+
+vfs_node_t *vfs_get_node(int idx)
+{
+    if (idx >= 0 && idx < file_count)
+        return &file_system[idx];
+    return NULL;
+}

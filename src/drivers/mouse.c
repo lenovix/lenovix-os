@@ -5,8 +5,6 @@
 static mouse_state_t mouse_state = {512, 384, 0, 0, 0};
 static unsigned char mouse_cycle = 0;
 static char mouse_packet[3];
-static unsigned int mouse_timeout = 0;
-#define MOUSE_TIMEOUT_MAX 50000
 
 static const unsigned char cursor_sprite[18][12] = {
     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -88,80 +86,69 @@ void mouse_init(void)
     mouse_read();
 }
 
-void mouse_handler(void)
+void mouse_handler_c(void)
 {
     unsigned char status = inb(0x64);
-    if (!(status & 0x01))
+    if (status & 0x01)
     {
-        mouse_timeout++;
-        if (mouse_timeout > MOUSE_TIMEOUT_MAX)
+        unsigned char data = inb(0x60);
+        if (status & 0x20)
         {
-            mouse_cycle = 0;
-            mouse_timeout = 0;
-        }
-        return;
-    }
-
-    unsigned char data = inb(0x60);
-    mouse_timeout = 0;
-
-    if (!(status & 0x20) && mouse_cycle == 0)
-        return;
-
-    switch (mouse_cycle)
-    {
-    case 0:
-        if ((data & 0x08) == 0x08)
-        {
-            mouse_packet[0] = data;
-            mouse_cycle++;
-        }
-        else
-        {
-            mouse_cycle = 0;
-            if ((data & 0x08) == 0x08)
+            switch (mouse_cycle)
             {
-                mouse_packet[0] = data;
+            case 0:
+                if ((data & 0x08) == 0x08)
+                {
+                    mouse_packet[0] = data;
+                    mouse_cycle++;
+                }
+                break;
+            case 1:
+                mouse_packet[1] = data;
                 mouse_cycle++;
+                break;
+            case 2:
+                mouse_packet[2] = data;
+                mouse_cycle = 0;
+
+                mouse_state.left_button = mouse_packet[0] & 0x01;
+                mouse_state.right_button = (mouse_packet[0] >> 1) & 0x01;
+                mouse_state.middle_button = (mouse_packet[0] >> 2) & 0x01;
+
+                int rel_x = (int)mouse_packet[1];
+                int rel_y = (int)mouse_packet[2];
+
+                if (mouse_packet[0] & 0x10)
+                    rel_x |= 0xFFFFFF00;
+                if (mouse_packet[0] & 0x20)
+                    rel_y |= 0xFFFFFF00;
+
+                mouse_state.x += rel_x;
+                mouse_state.y -= rel_y;
+
+                if (mouse_state.x < 0)
+                    mouse_state.x = 0;
+                if (mouse_state.y < 0)
+                    mouse_state.y = 0;
+                if (mouse_state.x >= 1024)
+                    mouse_state.x = 1023;
+                if (mouse_state.y >= 768)
+                    mouse_state.y = 767;
+                break;
+            default:
+                mouse_cycle = 0;
+                break;
             }
         }
-        break;
-    case 1:
-        mouse_packet[1] = data;
-        mouse_cycle++;
-        break;
-    case 2:
-        mouse_packet[2] = data;
-        mouse_cycle = 0;
-
-        mouse_state.left_button = mouse_packet[0] & 0x01;
-        mouse_state.right_button = (mouse_packet[0] >> 1) & 0x01;
-        mouse_state.middle_button = (mouse_packet[0] >> 2) & 0x01;
-
-        int rel_x = (int)mouse_packet[1];
-        int rel_y = (int)mouse_packet[2];
-
-        if (mouse_packet[0] & 0x10)
-            rel_x |= 0xFFFFFF00;
-        if (mouse_packet[0] & 0x20)
-            rel_y |= 0xFFFFFF00;
-
-        mouse_state.x += rel_x;
-        mouse_state.y -= rel_y;
-
-        if (mouse_state.x < 0)
-            mouse_state.x = 0;
-        if (mouse_state.y < 0)
-            mouse_state.y = 0;
-        if (mouse_state.x >= 1024)
-            mouse_state.x = 1023;
-        if (mouse_state.y >= 768)
-            mouse_state.y = 767;
-        break;
-    default:
-        mouse_cycle = 0;
-        break;
     }
+
+    outb(0xA0, 0x20);
+    outb(0x20, 0x20);
+}
+
+void mouse_handler(void)
+{
+    // Polling compatibility wrapper (interrupt handles processing)
 }
 
 mouse_state_t *mouse_get_state(void)

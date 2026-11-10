@@ -8,6 +8,7 @@ static int next_pid = 1;
 
 extern void kprint(const char *str, char color);
 extern void switch_to_task(unsigned int *old_esp, unsigned int new_esp);
+extern void tss_set_stack(unsigned int stack);
 
 void init_multitasking(void)
 {
@@ -34,15 +35,26 @@ task_t *create_task(const char *name, void (*entry_point)(void))
 
     unsigned int stack_size = 4096;
     new_task->stack = (unsigned int *)kmalloc(stack_size);
+    if (!new_task->stack)
+    {
+        kfree(new_task);
+        return NULL;
+    }
 
     unsigned int *sp = (unsigned int *)((char *)new_task->stack + stack_size);
 
-    *(--sp) = (unsigned int)entry_point;
+    *(--sp) = 0x0202;                    // EFLAGS (Interrupts enabled)
+    *(--sp) = 0x08;                      // CS (Kernel Code)
+    *(--sp) = (unsigned int)entry_point; // EIP
 
-    *(--sp) = 0;
-    *(--sp) = 0;
-    *(--sp) = 0;
-    *(--sp) = 0;
+    *(--sp) = 0; // EAX
+    *(--sp) = 0; // ECX
+    *(--sp) = 0; // EDX
+    *(--sp) = 0; // EBX
+    *(--sp) = 0; // ESP
+    *(--sp) = 0; // EBP
+    *(--sp) = 0; // ESI
+    *(--sp) = 0; // EDI
 
     new_task->regs.esp = (unsigned int)sp;
     new_task->regs.eip = (unsigned int)entry_point;
@@ -101,6 +113,11 @@ void schedule(void)
     {
         current_task = next_task;
         current_task->state = TASK_RUNNING;
+
+        if (next_task->stack)
+        {
+            tss_set_stack((unsigned int)next_task->stack + 4096);
+        }
 
         switch_to_task(&(prev_task->regs.esp), next_task->regs.esp);
     }

@@ -1,7 +1,8 @@
 #ifndef MOUSE_H
 #define MOUSE_H
 
-typedef struct {
+typedef struct
+{
     int x;
     int y;
     unsigned char left_button;
@@ -11,7 +12,8 @@ typedef struct {
 
 void mouse_init(void);
 void mouse_handler(void);
-mouse_state_t* mouse_get_state(void);
+void mouse_handler_c(void);
+mouse_state_t *mouse_get_state(void);
 void vesa_draw_cursor(int x, int y);
 
 #endif

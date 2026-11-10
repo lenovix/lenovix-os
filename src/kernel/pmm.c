@@ -113,6 +113,13 @@ void init_pmm(struct multiboot_info *mb_info, unsigned int kernel_end_addr)
     {
         pmm_set_bit(b);
     }
+
+    unsigned int heap_start_block = 0x01000000 / PMM_BLOCK_SIZE;
+    unsigned int heap_end_block = 0x01400000 / PMM_BLOCK_SIZE;
+    for (unsigned int b = heap_start_block; b < heap_end_block && b < pmm_max_blocks; b++)
+    {
+        pmm_set_bit(b);
+    }
 }
 
 void *pmm_alloc_block(void)

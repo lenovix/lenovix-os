@@ -5,8 +5,10 @@
 #define TERM_COLS 42
 #define MAX_INPUT_LEN 40
 
-typedef struct {
+typedef struct
+{
     char buffer[TERM_ROWS][TERM_COLS];
+    unsigned int buffer_color[TERM_ROWS];
     char input_buf[MAX_INPUT_LEN];
     int input_len;
     int cursor_row;
@@ -17,5 +19,6 @@ void terminal_init(terminal_t *term);
 void terminal_draw(terminal_t *term, int win_x, int win_y);
 void terminal_handle_key(terminal_t *term, char c);
 void terminal_write_line(terminal_t *term, const char *str);
+void terminal_write_line_color(terminal_t *term, const char *str, unsigned int color);
 
 #endif
