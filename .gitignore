@@ -1,2 +1,6 @@
 .vscode/
 .aider.*
+lenovix.iso
+build/*.o
+build/*.bin
+iso/boot/*.bin

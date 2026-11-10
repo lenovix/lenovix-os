@@ -1,7 +1,12 @@
 #ifndef MULTIBOOT_H
 #define MULTIBOOT_H
 
-struct multiboot_mmap_entry {
+#ifndef NULL
+#define NULL ((void*)0)
+#endif
+
+struct multiboot_mmap_entry
+{
     unsigned int size;
     unsigned int base_addr_low;
     unsigned int base_addr_high;
@@ -10,7 +15,8 @@ struct multiboot_mmap_entry {
     unsigned int type;
 } __attribute__((packed));
 
-typedef struct multiboot_info {
+typedef struct multiboot_info
+{
     unsigned int flags;
     unsigned int mem_lower;
     unsigned int mem_upper;
@@ -32,8 +38,6 @@ typedef struct multiboot_info {
     unsigned short vbe_interface_seg;
     unsigned short vbe_interface_off;
     unsigned short vbe_interface_len;
-    
-    // Framebuffer Info (Multiboot Graphic Extension)
     unsigned long long framebuffer_addr;
     unsigned int framebuffer_pitch;
     unsigned int framebuffer_width;
