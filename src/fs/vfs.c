@@ -255,3 +255,56 @@ size_t vfs_get_total_used_bytes(void)
     }
     return total;
 }
+
+int vfs_rename_file(const char *old_name, const char *new_name)
+{
+    if (!old_name || !new_name || new_name[0] == '\0')
+        return -1;
+
+    if (vfs_find_file(new_name) != NULL)
+        return -2;
+
+    vfs_node_t *node = vfs_find_file(old_name);
+    if (!node)
+        return -3;
+
+    string_copy(node->name, new_name);
+    return 0;
+}
+
+int vfs_append_file(const char *filename, const char *content)
+{
+    if (!filename || !content)
+        return -1;
+
+    vfs_node_t *file = vfs_find_file(filename);
+    if (!file)
+    {
+        return vfs_create_file_raw(filename, content);
+    }
+
+    size_t append_len = string_length(content);
+    size_t new_len = file->length + append_len;
+
+    char *new_data = (char *)kmalloc(new_len + 1);
+    if (!new_data)
+        return -3;
+
+    for (size_t i = 0; i < file->length; i++)
+    {
+        new_data[i] = file->data ? file->data[i] : '\0';
+    }
+    for (size_t i = 0; i <= append_len; i++)
+    {
+        new_data[file->length + i] = content[i];
+    }
+
+    if (file->data != NULL)
+    {
+        kfree(file->data);
+    }
+
+    file->data = new_data;
+    file->length = new_len;
+    return 0;
+}

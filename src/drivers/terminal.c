@@ -327,6 +327,410 @@ static void cmd_write(terminal_t *term, const char *args)
     terminal_write_line(term, "File berhasil disimpan.");
 }
 
+static void cmd_echo(terminal_t *term, const char *args)
+{
+    while (*args == ' ')
+        args++;
+    if (*args == '\0')
+    {
+        terminal_write_line(term, "");
+        return;
+    }
+
+    char text[128];
+    char target_file[MAX_FILENAME_LEN];
+    int mode = 0;
+    int redir_pos = -1;
+
+    for (int i = 0; args[i] != '\0'; i++)
+    {
+        if (args[i] == '>')
+        {
+            if (args[i + 1] == '>')
+            {
+                mode = 2;
+                redir_pos = i;
+            }
+            else
+            {
+                mode = 1;
+                redir_pos = i;
+            }
+            break;
+        }
+    }
+
+    if (mode == 0)
+    {
+        int t = 0;
+        int start = (*args == '"' || *args == '\'') ? 1 : 0;
+        int i = start;
+        while (args[i] != '\0' && t < 127)
+        {
+            text[t++] = args[i++];
+        }
+        if (start && t > 0 && (text[t - 1] == '"' || text[t - 1] == '\''))
+        {
+            t--;
+        }
+        text[t] = '\0';
+        terminal_write_line_color(term, text, 0xFFFFFF);
+    }
+    else
+    {
+        int t = 0;
+        int i = 0;
+        while (*args == ' ' && i < redir_pos)
+        {
+            args++;
+            redir_pos--;
+        }
+        int start = (*args == '"' || *args == '\'') ? 1 : 0;
+        i = start;
+        int end_t = (start && redir_pos > 0 && (args[redir_pos - 1] == '"' || args[redir_pos - 1] == '\'')) ? redir_pos - 1 : redir_pos;
+        while (i < end_t && t < 127)
+        {
+            text[t++] = args[i++];
+        }
+        while (t > 0 && text[t - 1] == ' ')
+            t--;
+        text[t] = '\0';
+
+        const char *f = args + redir_pos + ((mode == 2) ? 2 : 1);
+        while (*f == ' ')
+            f++;
+        int fi = 0;
+        while (*f != '\0' && *f != ' ' && fi < MAX_FILENAME_LEN - 1)
+        {
+            target_file[fi++] = *f++;
+        }
+        target_file[fi] = '\0';
+
+        if (target_file[0] == '\0')
+        {
+            terminal_write_line(term, "Gunakan: echo <teks> [>|>>] <file>");
+            return;
+        }
+
+        if (mode == 1)
+        {
+            vfs_node_t *existing = vfs_find_file(target_file);
+            if (existing)
+            {
+                vfs_write_file_cmd(target_file, text);
+            }
+            else
+            {
+                vfs_create_file_raw(target_file, text);
+            }
+            terminal_write_line_color(term, "\033[32mOutput ditulis ke file.\033[0m", 0x2ECC40);
+        }
+        else if (mode == 2)
+        {
+            vfs_node_t *existing = vfs_find_file(target_file);
+            if (existing && existing->length > 0)
+            {
+                vfs_append_file(target_file, "\n");
+            }
+            vfs_append_file(target_file, text);
+            terminal_write_line_color(term, "\033[32mOutput ditambahkan ke file.\033[0m", 0x2ECC40);
+        }
+    }
+}
+
+static void cmd_mv(terminal_t *term, const char *args)
+{
+    while (*args == ' ')
+        args++;
+    char old_name[MAX_FILENAME_LEN];
+    char new_name[MAX_FILENAME_LEN];
+    int i = 0;
+    while (*args != ' ' && *args != '\0' && i < MAX_FILENAME_LEN - 1)
+    {
+        old_name[i++] = *args++;
+    }
+    old_name[i] = '\0';
+    while (*args == ' ')
+        args++;
+    int j = 0;
+    while (*args != ' ' && *args != '\0' && j < MAX_FILENAME_LEN - 1)
+    {
+        new_name[j++] = *args++;
+    }
+    new_name[j] = '\0';
+
+    if (old_name[0] == '\0' || new_name[0] == '\0')
+    {
+        terminal_write_line(term, "Gunakan: mv <nama_lama> <nama_baru>");
+        return;
+    }
+
+    int res = vfs_rename_file(old_name, new_name);
+    if (res == 0)
+    {
+        terminal_write_line_color(term, "\033[32mFile berhasil diubah namanya.\033[0m", 0x2ECC40);
+    }
+    else if (res == -2)
+    {
+        terminal_write_line_color(term, "\033[31mNama file tujuan sudah ada.\033[0m", 0xFF4136);
+    }
+    else
+    {
+        terminal_write_line_color(term, "\033[31mFile asal tidak ditemukan.\033[0m", 0xFF4136);
+    }
+}
+
+static int str_contains_nocase(const char *haystack, const char *needle)
+{
+    if (!haystack || !needle)
+        return 0;
+    if (needle[0] == '\0')
+        return 1;
+
+    for (int i = 0; haystack[i] != '\0'; i++)
+    {
+        int j = 0;
+        while (needle[j] != '\0')
+        {
+            char h = haystack[i + j];
+            char n = needle[j];
+            if (h == '\0')
+                break;
+            if (h >= 'A' && h <= 'Z')
+                h += ('a' - 'A');
+            if (n >= 'A' && n <= 'Z')
+                n += ('a' - 'A');
+            if (h != n)
+                break;
+            j++;
+        }
+        if (needle[j] == '\0')
+            return 1;
+    }
+    return 0;
+}
+
+static void cmd_grep(terminal_t *term, const char *args)
+{
+    while (*args == ' ')
+        args++;
+    char pattern[MAX_FILENAME_LEN];
+    int pidx = 0;
+
+    if (*args == '"' || *args == '\'')
+    {
+        char quote = *args++;
+        while (*args != '\0' && *args != quote && pidx < MAX_FILENAME_LEN - 1)
+        {
+            pattern[pidx++] = *args++;
+        }
+        if (*args == quote)
+            args++;
+    }
+    else
+    {
+        while (*args != ' ' && *args != '\0' && pidx < MAX_FILENAME_LEN - 1)
+        {
+            pattern[pidx++] = *args++;
+        }
+    }
+    pattern[pidx] = '\0';
+
+    while (*args == ' ')
+        args++;
+    char fname[MAX_FILENAME_LEN];
+    int fidx = 0;
+    while (*args != ' ' && *args != '\0' && fidx < MAX_FILENAME_LEN - 1)
+    {
+        fname[fidx++] = *args++;
+    }
+    fname[fidx] = '\0';
+
+    if (pattern[0] == '\0' || fname[0] == '\0')
+    {
+        terminal_write_line(term, "Gunakan: grep <pola> <file>");
+        return;
+    }
+
+    vfs_node_t *f = vfs_find_file(fname);
+    if (!f || !f->data)
+    {
+        terminal_write_line_color(term, "\033[31mFile tidak ditemukan.\033[0m", 0xFF4136);
+        return;
+    }
+
+    const char *data = f->data;
+    int line_num = 1;
+    int matches = 0;
+    char cur_line[TERM_COLS];
+    int cidx = 0;
+
+    for (size_t i = 0; i <= f->length; i++)
+    {
+        char ch = data[i];
+        if (ch == '\n' || ch == '\0')
+        {
+            cur_line[cidx] = '\0';
+            if (str_contains_nocase(cur_line, pattern))
+            {
+                matches++;
+                char out[TERM_COLS];
+                char num[8];
+                int_to_str(line_num, num);
+                int oi = 0;
+                out[oi++] = '[';
+                int ni = 0;
+                while (num[ni])
+                    out[oi++] = num[ni++];
+                out[oi++] = ']';
+                out[oi++] = ' ';
+                int li = 0;
+                while (cur_line[li] && oi < TERM_COLS - 1)
+                {
+                    out[oi++] = cur_line[li++];
+                }
+                out[oi] = '\0';
+                terminal_write_line_color(term, out, 0xFFDC00);
+            }
+            line_num++;
+            cidx = 0;
+            if (ch == '\0')
+                break;
+        }
+        else
+        {
+            if (cidx < TERM_COLS - 8)
+            {
+                cur_line[cidx++] = ch;
+            }
+        }
+    }
+
+    if (matches == 0)
+    {
+        terminal_write_line(term, "Pola tidak ditemukan.");
+    }
+}
+
+static inline void get_cpuid(unsigned int leaf, unsigned int *eax, unsigned int *ebx, unsigned int *ecx, unsigned int *edx)
+{
+    __asm__ __volatile__(
+        "cpuid"
+        : "=a"(*eax), "=b"(*ebx), "=c"(*ecx), "=d"(*edx)
+        : "a"(leaf));
+}
+
+static void cmd_uname(terminal_t *term, const char *args)
+{
+    while (*args == ' ')
+        args++;
+    if (*args == '-' && *(args + 1) == 'a')
+    {
+        terminal_write_line_color(term, "\033[36mLenovixOS 0.5.0 i386 x86_32 Bare-Metal\033[0m", 0x00D2FF);
+    }
+    else
+    {
+        terminal_write_line_color(term, "\033[36mLenovixOS\033[0m", 0x00D2FF);
+    }
+}
+
+static void cmd_systeminfo(terminal_t *term)
+{
+    terminal_write_line_color(term, "\033[36m=== Lenovix OS Specifications ===\033[0m", 0x00D2FF);
+
+    unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+    get_cpuid(0, &eax, &ebx, &ecx, &edx);
+    char vendor[13];
+    *(unsigned int *)(vendor + 0) = ebx;
+    *(unsigned int *)(vendor + 4) = edx;
+    *(unsigned int *)(vendor + 8) = ecx;
+    vendor[12] = '\0';
+
+    char line[TERM_COLS];
+    int j = 0;
+    const char *p = "CPU Vendor : ";
+    while (*p)
+        line[j++] = *p++;
+    p = vendor;
+    while (*p && j < TERM_COLS - 1)
+        line[j++] = *p++;
+    line[j] = '\0';
+    terminal_write_line(term, line);
+
+    get_cpuid(0x80000000, &eax, &ebx, &ecx, &edx);
+    if (eax >= 0x80000004)
+    {
+        char brand[49];
+        get_cpuid(0x80000002, (unsigned int *)(brand + 0), (unsigned int *)(brand + 4), (unsigned int *)(brand + 8), (unsigned int *)(brand + 12));
+        get_cpuid(0x80000003, (unsigned int *)(brand + 16), (unsigned int *)(brand + 20), (unsigned int *)(brand + 24), (unsigned int *)(brand + 28));
+        get_cpuid(0x80000004, (unsigned int *)(brand + 32), (unsigned int *)(brand + 36), (unsigned int *)(brand + 40), (unsigned int *)(brand + 44));
+        brand[48] = '\0';
+
+        const char *bptr = brand;
+        while (*bptr == ' ')
+            bptr++;
+
+        j = 0;
+        p = "Model      : ";
+        while (*p)
+            line[j++] = *p++;
+        while (*bptr && j < TERM_COLS - 1)
+            line[j++] = *bptr++;
+        line[j] = '\0';
+        terminal_write_line(term, line);
+    }
+
+    get_cpuid(1, &eax, &ebx, &ecx, &edx);
+    j = 0;
+    p = "Features   : ";
+    while (*p)
+        line[j++] = *p++;
+    if (edx & (1 << 0))
+    {
+        line[j++] = 'F';
+        line[j++] = 'P';
+        line[j++] = 'U';
+        line[j++] = ' ';
+    }
+    if (edx & (1 << 9))
+    {
+        line[j++] = 'A';
+        line[j++] = 'P';
+        line[j++] = 'I';
+        line[j++] = 'C';
+        line[j++] = ' ';
+    }
+    if (edx & (1 << 23))
+    {
+        line[j++] = 'M';
+        line[j++] = 'M';
+        line[j++] = 'X';
+        line[j++] = ' ';
+    }
+    if (edx & (1 << 25))
+    {
+        line[j++] = 'S';
+        line[j++] = 'S';
+        line[j++] = 'E';
+        line[j++] = ' ';
+    }
+    if (edx & (1 << 26))
+    {
+        line[j++] = 'S';
+        line[j++] = 'S';
+        line[j++] = 'E';
+        line[j++] = '2';
+        line[j++] = ' ';
+    }
+    line[j] = '\0';
+    terminal_write_line(term, line);
+
+    terminal_write_line(term, "Kernel Arch: x86-32 Protected (Ring 0/3)");
+    terminal_write_line(term, "Display    : VESA 1024x768 32bpp Linear");
+    terminal_write_line(term, "Networking : RTL8139 (IP/ARP/ICMP/UDP/TCP)");
+    terminal_write_line(term, "Sound      : PC Speaker + SoundBlaster 16");
+}
+
 static void cmd_free(terminal_t *term)
 {
     unsigned int free_blks = pmm_get_free_block_count();
@@ -1531,8 +1935,8 @@ static int term_hist_idx = -1;
 
 static const char *known_commands[] = {
     "help", "clear", "ver", "about", "ls", "fatls", "fatread",
-    "cat", "touch", "write", "rm", "cp", "df", "hexdump", "free",
-    "date", "uptime", "diskinfo", "diskr", "diskw",
+    "cat", "touch", "write", "echo", "rm", "cp", "mv", "grep", "df", "hexdump", "free",
+    "date", "uptime", "uname", "systeminfo", "diskinfo", "diskr", "diskw",
     "userdemo", "elfdemo", "lspci", "netinfo", "ifconfig", "ping", "dns", "curl",
     "tarlist", "beep", "sbtest", "play", "ps", "kill", "taskdemo",
     "reboot", "shutdown", NULL};
@@ -1649,9 +2053,9 @@ static void terminal_execute_command(terminal_t *term)
 
     if (str_equals(term->input_buf, "help"))
     {
-        terminal_write_line(term, "Cmds: ls, cat, touch, write, rm, cp, df");
-        terminal_write_line(term, "      hexdump <file> [bytes], date, uptime");
-        terminal_write_line(term, "      free, fatls, fatread, tarlist");
+        terminal_write_line(term, "Cmds: ls, cat, touch, write, echo, rm, cp, mv");
+        terminal_write_line(term, "      grep, df, hexdump, date, uptime, uname");
+        terminal_write_line(term, "      systeminfo, free, fatls, fatread, tarlist");
         terminal_write_line(term, "      diskinfo, diskr, diskw, lspci");
         terminal_write_line(term, "      ps, kill <pid>, taskdemo");
         terminal_write_line(term, "      netinfo, ifconfig, ping [host] [count]");
@@ -1702,6 +2106,13 @@ static void terminal_execute_command(terminal_t *term)
     {
         cmd_write(term, term->input_buf + 6);
     }
+    else if (str_equals(term->input_buf, "echo") || str_starts_with(term->input_buf, "echo "))
+    {
+        const char *eargs = term->input_buf + 4;
+        while (*eargs == ' ')
+            eargs++;
+        cmd_echo(term, eargs);
+    }
     else if (str_starts_with(term->input_buf, "rm "))
     {
         cmd_rm(term, term->input_buf + 3);
@@ -1709,6 +2120,14 @@ static void terminal_execute_command(terminal_t *term)
     else if (str_starts_with(term->input_buf, "cp "))
     {
         cmd_cp(term, term->input_buf + 3);
+    }
+    else if (str_starts_with(term->input_buf, "mv "))
+    {
+        cmd_mv(term, term->input_buf + 3);
+    }
+    else if (str_starts_with(term->input_buf, "grep "))
+    {
+        cmd_grep(term, term->input_buf + 5);
     }
     else if (str_equals(term->input_buf, "df"))
     {
@@ -1725,6 +2144,17 @@ static void terminal_execute_command(terminal_t *term)
     else if (str_equals(term->input_buf, "uptime"))
     {
         cmd_uptime(term);
+    }
+    else if (str_equals(term->input_buf, "uname") || str_starts_with(term->input_buf, "uname "))
+    {
+        const char *uargs = term->input_buf + 5;
+        while (*uargs == ' ')
+            uargs++;
+        cmd_uname(term, uargs);
+    }
+    else if (str_equals(term->input_buf, "systeminfo"))
+    {
+        cmd_systeminfo(term);
     }
     else if (str_equals(term->input_buf, "free"))
     {

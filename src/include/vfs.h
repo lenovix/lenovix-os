@@ -23,6 +23,8 @@ int vfs_get_count(void);
 vfs_node_t *vfs_get_node(int idx);
 int vfs_delete_file(const char *name);
 int vfs_copy_file(const char *src_name, const char *dest_name);
+int vfs_rename_file(const char *old_name, const char *new_name);
+int vfs_append_file(const char *filename, const char *content);
 size_t vfs_get_total_used_bytes(void);
 
 void vfs_read_file_cmd(const char *name);
