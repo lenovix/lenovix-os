@@ -127,3 +127,43 @@ void task_yield(void)
 {
     schedule();
 }
+
+int task_kill(int pid)
+{
+    if (pid <= 0)
+        return -1;
+    if (!task_list_head)
+        return -2;
+    task_t *curr = task_list_head;
+    do
+    {
+        if (curr->id == pid)
+        {
+            curr->state = TASK_TERMINATED;
+            if (curr == current_task)
+            {
+                schedule();
+            }
+            return 0;
+        }
+        curr = curr->next;
+    } while (curr != task_list_head && curr != NULL);
+    return -3;
+}
+
+int task_get_list(task_info_t *out, int max)
+{
+    if (!out || max <= 0 || !task_list_head)
+        return 0;
+    int count = 0;
+    task_t *curr = task_list_head;
+    do
+    {
+        out[count].id = curr->id;
+        string_copy(out[count].name, curr->name);
+        out[count].state = curr->state;
+        count++;
+        curr = curr->next;
+    } while (curr != task_list_head && curr != NULL && count < max);
+    return count;
+}

@@ -3,6 +3,7 @@
 #include "terminal.h"
 #include "vfs.h"
 #include "bmp.h"
+#include "task.h"
 
 extern terminal_t main_term;
 extern unsigned int pmm_get_free_block_count(void);
@@ -105,7 +106,7 @@ static void draw_sysinfo_app(window_t *win)
     int app_h = win->height - 45;
 
     vesa_draw_rect(app_x, app_y, app_w, app_h, 0x111111);
-    vesa_draw_string(app_x + 10, app_y + 10, "Lenovix OS Task & System Monitor", 0x0074D9);
+    vesa_draw_string(app_x + 10, app_y + 8, "Task & System Monitor", 0x0074D9);
 
     unsigned int free_blks = pmm_get_free_block_count();
     unsigned int max_blks = pmm_get_max_blocks();
@@ -113,53 +114,68 @@ static void draw_sysinfo_app(window_t *win)
         max_blks = 1;
 
     unsigned int used_blks = (max_blks > free_blks) ? (max_blks - free_blks) : 0;
-    int bar_width = app_w - 40;
+    int bar_width = app_w - 20;
     int fill_width = (used_blks * bar_width) / max_blks;
     if (fill_width > bar_width)
         fill_width = bar_width;
 
-    vesa_draw_string(app_x + 10, app_y + 35, "RAM Usage (PMM 4KB Pages):", 0xAAAAAA);
-    vesa_draw_rect(app_x + 10, app_y + 55, bar_width, 16, 0x333333);
-    vesa_draw_rect(app_x + 10, app_y + 55, fill_width, 16, 0x2ECC40);
+    vesa_draw_rect(app_x + 10, app_y + 26, bar_width, 10, 0x333333);
+    vesa_draw_rect(app_x + 10, app_y + 26, fill_width, 10, 0x2ECC40);
 
     char mem_info[40];
     char temp[16];
     int mi = 0;
-    const char *p = "Free: ";
+    const char *p = "RAM: ";
     while (*p)
         mem_info[mi++] = *p++;
     int_to_str_local((free_blks * 4) / 1024, temp);
     int ti = 0;
     while (temp[ti])
         mem_info[mi++] = temp[ti++];
-    p = "MB / ";
+    p = "/";
     while (*p)
         mem_info[mi++] = *p++;
     int_to_str_local((max_blks * 4) / 1024, temp);
     ti = 0;
     while (temp[ti])
         mem_info[mi++] = temp[ti++];
-    p = "MB";
+    p = "MB Free";
     while (*p)
         mem_info[mi++] = *p++;
     mem_info[mi] = '\0';
-    vesa_draw_string(app_x + 10, app_y + 75, mem_info, 0xFFFFFF);
+    vesa_draw_string(app_x + 10, app_y + 40, mem_info, 0xAAAAAA);
+    vesa_draw_rect(app_x + 10, app_y + 58, app_w - 20, 18, 0x222222);
+    vesa_draw_string(app_x + 14, app_y + 62, "PID", 0x00D2FF);
+    vesa_draw_string(app_x + 50, app_y + 62, "PROCESS NAME", 0x00D2FF);
+    vesa_draw_string(app_x + 190, app_y + 62, "STATUS", 0x00D2FF);
+    vesa_draw_string(app_x + app_w - 65, app_y + 62, "ACTION", 0x00D2FF);
 
-    char tick_str[40];
-    int tki = 0;
-    p = "Timer Ticks (PIT): ";
-    while (*p)
-        tick_str[tki++] = *p++;
-    int_to_str_local(timer_ticks, temp);
-    ti = 0;
-    while (temp[ti])
-        tick_str[tki++] = temp[ti++];
-    tick_str[tki] = '\0';
-    vesa_draw_string(app_x + 10, app_y + 105, tick_str, 0xFFDC00);
+    task_info_t tasks[5];
+    int tcount = task_get_list(tasks, 5);
 
-    vesa_draw_string(app_x + 10, app_y + 130, "Paging: 2-Level 4KB Active", 0x2ECC40);
-    vesa_draw_string(app_x + 10, app_y + 150, "Scheduler: Preemptive PIT IRQ0", 0x2ECC40);
-    vesa_draw_string(app_x + 10, app_y + 170, "CPU: x86 Ring 0/3 TSS Loaded", 0x2ECC40);
+    for (int i = 0; i < tcount; i++)
+    {
+        int row_y = app_y + 80 + (i * 22);
+        vesa_draw_rect(app_x + 10, row_y, app_w - 20, 20, (i % 2 == 0) ? 0x1A1A1A : 0x262626);
+
+        char pid_str[8];
+        int_to_str_local(tasks[i].id, pid_str);
+        vesa_draw_string(app_x + 14, row_y + 3, pid_str, 0xFFFFFF);
+
+        vesa_draw_string(app_x + 50, row_y + 3, tasks[i].name, 0xFFFFFF);
+
+        const char *st = (tasks[i].state == TASK_RUNNING) ? "RUN" : (tasks[i].state == TASK_READY) ? "READY"
+                                                                                                   : "STOP";
+        unsigned int sc = (tasks[i].state == TASK_RUNNING) ? 0x2ECC40 : (tasks[i].state == TASK_READY) ? 0xFFDC00
+                                                                                                       : 0x888888;
+        vesa_draw_string(app_x + 190, row_y + 3, st, sc);
+
+        if (tasks[i].id != 0 && tasks[i].state != TASK_TERMINATED)
+        {
+            vesa_draw_rect(app_x + app_w - 68, row_y + 2, 45, 16, 0xFF4136);
+            vesa_draw_string(app_x + app_w - 62, row_y + 3, "Kill", 0xFFFFFF);
+        }
+    }
 }
 
 static char notepad_buffer[512] = "Tulis catatan Anda di sini...\n";
@@ -505,6 +521,173 @@ static void draw_snake_app(window_t *win)
     }
 }
 
+static int calc_stored = 0;
+static int calc_current = 0;
+static char calc_op = 0;
+static int calc_reset_next = 1;
+static char calc_disp_str[16] = "0";
+
+void calc_init(void)
+{
+    calc_stored = 0;
+    calc_current = 0;
+    calc_op = 0;
+    calc_reset_next = 1;
+    calc_disp_str[0] = '0';
+    calc_disp_str[1] = '\0';
+}
+
+static void calc_update_display(int val)
+{
+    calc_current = val;
+    int is_neg = (val < 0);
+    if (is_neg)
+        val = -val;
+
+    char tmp[16];
+    int idx = 0;
+    if (val == 0)
+    {
+        tmp[idx++] = '0';
+    }
+    else
+    {
+        while (val > 0 && idx < 12)
+        {
+            tmp[idx++] = '0' + (val % 10);
+            val /= 10;
+        }
+    }
+    int d = 0;
+    if (is_neg)
+        calc_disp_str[d++] = '-';
+    while (idx > 0)
+    {
+        calc_disp_str[d++] = tmp[--idx];
+    }
+    calc_disp_str[d] = '\0';
+}
+
+static void calc_eval(void)
+{
+    if (calc_op == '+')
+        calc_stored += calc_current;
+    else if (calc_op == '-')
+        calc_stored -= calc_current;
+    else if (calc_op == '*')
+        calc_stored *= calc_current;
+    else if (calc_op == '/')
+    {
+        if (calc_current != 0)
+            calc_stored /= calc_current;
+        else
+            calc_stored = 0;
+    }
+    else
+    {
+        calc_stored = calc_current;
+    }
+    calc_update_display(calc_stored);
+    calc_reset_next = 1;
+}
+
+void calc_handle_key(char c)
+{
+    if (c >= '0' && c <= '9')
+    {
+        int digit = c - '0';
+        if (calc_reset_next)
+        {
+            calc_current = digit;
+            calc_reset_next = 0;
+        }
+        else
+        {
+            calc_current = calc_current * 10 + digit;
+        }
+        calc_update_display(calc_current);
+    }
+    else if (c == '+' || c == '-' || c == '*' || c == '/')
+    {
+        if (calc_op != 0 && !calc_reset_next)
+        {
+            calc_eval();
+        }
+        else
+        {
+            calc_stored = calc_current;
+        }
+        calc_op = c;
+        calc_reset_next = 1;
+    }
+    else if (c == '=' || c == '\n')
+    {
+        calc_eval();
+        calc_op = 0;
+    }
+    else if (c == 'c' || c == 'C')
+    {
+        calc_init();
+    }
+}
+
+static const char *calc_btn_labels[4][4] = {
+    {"7", "8", "9", "/"},
+    {"4", "5", "6", "*"},
+    {"1", "2", "3", "-"},
+    {"C", "0", "=", "+"}};
+
+static void draw_calc_app(window_t *win)
+{
+    int app_x = win->x + 10;
+    int app_y = win->y + 35;
+    int app_w = win->width - 20;
+    int app_h = win->height - 45;
+
+    vesa_draw_rect(app_x, app_y, app_w, app_h, 0x1E1E1E);
+    vesa_draw_rect(app_x + 10, app_y + 10, app_w - 20, 32, 0x0A0A0A);
+    vesa_draw_rect(app_x + 9, app_y + 9, app_w - 18, 1, 0x333333);
+    vesa_draw_string(app_x + 20, app_y + 18, calc_disp_str, 0x00FF88);
+
+    int btn_start_y = app_y + 50;
+    for (int r = 0; r < 4; r++)
+    {
+        for (int c = 0; c < 4; c++)
+        {
+            int bx = app_x + 10 + c * (46 + 4);
+            int by = btn_start_y + r * (36 + 4);
+            unsigned int bg = (c == 3 || (r == 3 && c == 2)) ? 0x0074D9 : (r == 3 && c == 0) ? 0xFF4136
+                                                                                             : 0x2A2A2A;
+            vesa_draw_rect(bx, by, 46, 36, bg);
+            vesa_draw_string(bx + 18, by + 10, calc_btn_labels[r][c], 0xFFFFFF);
+        }
+    }
+}
+
+int calc_handle_click(window_t *win, int mouse_x, int mouse_y)
+{
+    if (win->app_type != WIN_APP_CALC)
+        return 0;
+    int app_x = win->x + 10;
+    int app_y = win->y + 35;
+    int btn_start_y = app_y + 50;
+
+    for (int r = 0; r < 4; r++)
+    {
+        for (int c = 0; c < 4; c++)
+        {
+            int bx = app_x + 10 + c * (46 + 4);
+            int by = btn_start_y + r * (36 + 4);
+            if (mouse_x >= bx && mouse_x <= bx + 46 && mouse_y >= by && mouse_y <= by + 36)
+            {
+                calc_handle_key(calc_btn_labels[r][c][0]);
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 void window_draw(window_t *win)
 {
     if (!win->is_visible)
@@ -542,6 +725,10 @@ void window_draw(window_t *win)
     {
         draw_snake_app(win);
     }
+    else if (win->app_type == WIN_APP_CALC)
+    {
+        draw_calc_app(win);
+    }
 }
 
 void window_handle_mouse(window_t *win, int mouse_x, int mouse_y, unsigned char left_btn)
@@ -565,6 +752,45 @@ void window_handle_mouse(window_t *win, int mouse_x, int mouse_y, unsigned char 
                 win->is_visible = 0;
                 win->is_dragging = 0;
                 return;
+            }
+
+            if (win->app_type == WIN_APP_TERMINAL)
+            {
+                if (terminal_handle_click(&main_term, win->x, win->y, mouse_x, mouse_y))
+                {
+                    return;
+                }
+            }
+
+            if (win->app_type == WIN_APP_CALC)
+            {
+                if (calc_handle_click(win, mouse_x, mouse_y))
+                {
+                    return;
+                }
+            }
+
+            if (win->app_type == WIN_APP_SYSINFO)
+            {
+                int app_x = win->x + 10;
+                int app_y = win->y + 35;
+                int app_w = win->width - 20;
+                task_info_t tasks[5];
+                int tcount = task_get_list(tasks, 5);
+                for (int i = 0; i < tcount; i++)
+                {
+                    int row_y = app_y + 80 + (i * 22);
+                    int kbtn_x = app_x + app_w - 68;
+                    if (mouse_x >= kbtn_x && mouse_x <= kbtn_x + 45 &&
+                        mouse_y >= row_y + 2 && mouse_y <= row_y + 18)
+                    {
+                        if (tasks[i].id != 0)
+                        {
+                            task_kill(tasks[i].id);
+                        }
+                        return;
+                    }
+                }
             }
 
             if (win->app_type == WIN_APP_NOTEPAD)

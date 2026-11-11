@@ -16,6 +16,7 @@ OBJS = $(BUILD_DIR)/boot.o \
        $(BUILD_DIR)/pci.o \
        $(BUILD_DIR)/rtl8139.o \
        $(BUILD_DIR)/net.o \
+       $(BUILD_DIR)/tcp.o \
        $(BUILD_DIR)/speaker.o \
        $(BUILD_DIR)/sb16.o \
        $(BUILD_DIR)/rtc.o \
@@ -99,6 +100,10 @@ $(BUILD_DIR)/rtl8139.o: src/drivers/rtl8139.c
 	$(CC) $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/net.o: src/drivers/net.c
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/tcp.o: src/drivers/tcp.c
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) $< -o $@
 

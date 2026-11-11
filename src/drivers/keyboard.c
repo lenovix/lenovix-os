@@ -48,9 +48,13 @@ void keyboard_handler_c(void)
     {
         is_extended = 0;
         if (scancode == 0x48)
-            handle_history_up();
+            last_ascii_char = 0x11;
         else if (scancode == 0x50)
-            handle_history_down();
+            last_ascii_char = 0x12;
+        else if (scancode == 0x49)
+            last_ascii_char = 0x13;
+        else if (scancode == 0x51)
+            last_ascii_char = 0x14;
         outb(0x20, 0x20);
         return;
     }
@@ -80,7 +84,6 @@ void keyboard_handler_c(void)
         if (ascii != 0)
         {
             last_ascii_char = ascii;
-            terminal_handle_key(&active_terminal, ascii);
         }
     }
 

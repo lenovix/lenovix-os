@@ -7,6 +7,8 @@ static unsigned char dns_server_ip[4] = {10, 0, 2, 3};
 static unsigned char gateway_mac[6] = {0x52, 0x54, 0x00, 0x12, 0x34, 0x56};
 static int has_gateway_mac = 0;
 static int ping_reply_received = 0;
+static unsigned short ping_reply_seq = 0;
+static unsigned char ping_reply_ttl = 64;
 
 static unsigned char dns_result_ip[4] = {0};
 static int dns_reply_received = 0;
@@ -121,7 +123,17 @@ int net_send_arp(const unsigned char target_ip[4])
     return rtl8139_send_packet(frame, sizeof(frame));
 }
 
-int net_send_ping(const unsigned char target_ip[4])
+unsigned short net_get_ping_reply_seq(void)
+{
+    return ping_reply_seq;
+}
+
+unsigned char net_get_ping_reply_ttl(void)
+{
+    return ping_reply_ttl;
+}
+
+int net_send_ping_seq(const unsigned char target_ip[4], unsigned short seq)
 {
     unsigned int total_len = sizeof(eth_header_t) + sizeof(ipv4_header_t) + sizeof(icmp_header_t) + 32;
     unsigned char frame[128];
@@ -144,7 +156,8 @@ int net_send_ping(const unsigned char target_ip[4])
     ip->version_ihl = 0x45;
     ip->tos = 0;
     ip->total_length = swap16(sizeof(ipv4_header_t) + sizeof(icmp_header_t) + 32);
-    ip->id = swap16(0x1337);
+    static unsigned short ping_ip_id = 0x1337;
+    ip->id = swap16(ping_ip_id++);
     ip->flags_fragment = swap16(0x4000);
     ip->ttl = 64;
     ip->protocol = IP_PROTO_ICMP;
@@ -160,7 +173,7 @@ int net_send_ping(const unsigned char target_ip[4])
     icmp->code = 0;
     icmp->checksum = 0;
     icmp->id = swap16(0xBEEF);
-    icmp->sequence = swap16(1);
+    icmp->sequence = swap16(seq);
 
     for (int i = 0; i < 32; i++)
     {
@@ -169,6 +182,59 @@ int net_send_ping(const unsigned char target_ip[4])
     icmp->checksum = checksum(icmp, sizeof(icmp_header_t) + 32);
 
     ping_reply_received = 0;
+    return rtl8139_send_packet(frame, total_len);
+}
+
+int net_send_ping(const unsigned char target_ip[4])
+{
+    return net_send_ping_seq(target_ip, 1);
+}
+
+extern void tcp_handle_packet(const unsigned char *ip_data, unsigned int ip_len);
+
+int net_send_ipv4(const unsigned char target_ip[4], unsigned char protocol, const void *payload, unsigned short payload_len)
+{
+    unsigned int total_len = sizeof(eth_header_t) + sizeof(ipv4_header_t) + payload_len;
+    if (total_len > 1514)
+        return -1;
+
+    unsigned char frame[1514];
+    eth_header_t *eth = (eth_header_t *)frame;
+    ipv4_header_t *ip = (ipv4_header_t *)(frame + sizeof(eth_header_t));
+    unsigned char *data = frame + sizeof(eth_header_t) + sizeof(ipv4_header_t);
+
+    unsigned char my_mac[6];
+    rtl8139_get_mac(my_mac);
+
+    for (int i = 0; i < 6; i++)
+    {
+        eth->dest_mac[i] = has_gateway_mac ? gateway_mac[i] : 0xFF;
+        eth->src_mac[i] = my_mac[i];
+    }
+    eth->ethertype = swap16(ETH_TYPE_IPV4);
+
+    ip->version_ihl = 0x45;
+    ip->tos = 0;
+    ip->total_length = swap16(sizeof(ipv4_header_t) + payload_len);
+    static unsigned short ip_id_counter = 0x3000;
+    ip->id = swap16(ip_id_counter++);
+    ip->flags_fragment = swap16(0x4000);
+    ip->ttl = 64;
+    ip->protocol = protocol;
+    ip->checksum = 0;
+    for (int i = 0; i < 4; i++)
+    {
+        ip->src_ip[i] = my_ip[i];
+        ip->dest_ip[i] = target_ip[i];
+    }
+    ip->checksum = checksum(ip, sizeof(ipv4_header_t));
+
+    const unsigned char *src_data = (const unsigned char *)payload;
+    for (unsigned int i = 0; i < payload_len; i++)
+    {
+        data[i] = src_data[i];
+    }
+
     return rtl8139_send_packet(frame, total_len);
 }
 
@@ -344,6 +410,8 @@ static void handle_ipv4(const unsigned char *data, unsigned int len)
         if (icmp->type == 0)
         {
             ping_reply_received = 1;
+            ping_reply_seq = swap16(icmp->sequence);
+            ping_reply_ttl = ip->ttl;
         }
     }
     else if (ip->protocol == IP_PROTO_UDP)
@@ -356,6 +424,10 @@ static void handle_ipv4(const unsigned char *data, unsigned int len)
         {
             handle_dns(data + ip_hdr_len + sizeof(udp_header_t), len - ip_hdr_len - sizeof(udp_header_t));
         }
+    }
+    else if (ip->protocol == IP_PROTO_TCP)
+    {
+        tcp_handle_packet(data, len);
     }
 }
 

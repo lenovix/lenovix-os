@@ -7,6 +7,7 @@
 #define WIN_APP_NOTEPAD 3
 #define WIN_APP_VIEWER 4
 #define WIN_APP_GAME 5
+#define WIN_APP_CALC 6
 
 typedef struct
 {
@@ -34,5 +35,9 @@ int explorer_handle_click(window_t *win, int mouse_x, int mouse_y, char *out_nam
 void snake_init(void);
 void snake_update(void);
 void snake_handle_key(char c);
+
+void calc_init(void);
+void calc_handle_key(char c);
+int calc_handle_click(window_t *win, int mouse_x, int mouse_y);
 
 #endif

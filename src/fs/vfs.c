@@ -206,3 +206,52 @@ vfs_node_t *vfs_get_node(int idx)
         return &file_system[idx];
     return NULL;
 }
+
+int vfs_delete_file(const char *name)
+{
+    if (!name)
+        return -1;
+    for (int i = 0; i < file_count; i++)
+    {
+        if (string_equals(file_system[i].name, name))
+        {
+            if (file_system[i].data)
+            {
+                kfree(file_system[i].data);
+                file_system[i].data = NULL;
+            }
+            for (int j = i; j < file_count - 1; j++)
+            {
+                file_system[j] = file_system[j + 1];
+            }
+            file_count--;
+            file_system[file_count].name[0] = '\0';
+            file_system[file_count].length = 0;
+            file_system[file_count].data = NULL;
+            return 0;
+        }
+    }
+    return -1;
+}
+
+int vfs_copy_file(const char *src_name, const char *dest_name)
+{
+    if (!src_name || !dest_name)
+        return -1;
+    vfs_node_t *src = vfs_find_file(src_name);
+    if (!src)
+        return -2;
+
+    const char *content = src->data ? src->data : "";
+    return vfs_create_file_raw(dest_name, content);
+}
+
+size_t vfs_get_total_used_bytes(void)
+{
+    size_t total = 0;
+    for (int i = 0; i < file_count; i++)
+    {
+        total += file_system[i].length;
+    }
+    return total;
+}

@@ -21,6 +21,7 @@
 #include "sb16.h"
 #include "net.h"
 #include "tar.h"
+#include "tcp.h"
 
 extern void init_gdt(void);
 extern void init_idt(void);
@@ -83,7 +84,7 @@ void isr_syscall_handler(unsigned int syscall_num, unsigned int arg1)
     }
 }
 
-#define MAX_WINDOWS 6
+#define MAX_WINDOWS 7
 static window_t windows[MAX_WINDOWS];
 static int active_win = 0;
 static start_menu_t start_menu;
@@ -158,6 +159,7 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info)
     pci_init();
     rtl8139_init();
     net_init();
+    tcp_init();
     sb16_init();
     rtc_init();
     acpi_init();
@@ -177,6 +179,8 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info)
     window_init(&windows[4], 240, 140, 420, 260, "Image Viewer", WIN_APP_VIEWER);
     window_init(&windows[5], 220, 120, 390, 270, "Retro Snake", WIN_APP_GAME);
     snake_init();
+    window_init(&windows[6], 350, 150, 240, 260, "Calculator", WIN_APP_CALC);
+    calc_init();
     menu_init(&start_menu);
 
     mouse_state_t *mouse = mouse_get_state();
@@ -215,6 +219,11 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info)
                 snake_handle_key(key);
                 render_desktop(mouse);
             }
+            else if (active_win == 6 && windows[6].is_visible)
+            {
+                calc_handle_key(key);
+                render_desktop(mouse);
+            }
         }
 
         if (windows[5].is_visible)
@@ -240,13 +249,13 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info)
             else if (start_menu.is_visible)
             {
                 int action = menu_handle_click(&start_menu, mouse->x, mouse->y);
-                if (action >= 1 && action <= 6)
+                if (action >= 1 && action <= 7)
                 {
                     windows[action - 1].is_visible = 1;
                     active_win = action - 1;
                     start_menu.is_visible = 0;
                 }
-                else if (action == 7)
+                else if (action == 8)
                 {
                     acpi_power_off();
                 }

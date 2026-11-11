@@ -14,6 +14,12 @@
 #include "sb16.h"
 #include "net.h"
 #include "tar.h"
+#include "task.h"
+#include "tcp.h"
+#include "rtc.h"
+
+extern void cmd_taskdemo(void);
+extern unsigned int timer_ticks;
 
 extern unsigned int pmm_get_free_block_count(void);
 extern unsigned int pmm_get_max_blocks(void);
@@ -79,9 +85,15 @@ void terminal_write_line_color(terminal_t *term, const char *text, unsigned int 
     if (!term || !text)
         return;
 
-    if (term->cursor_row >= TERM_ROWS)
+    int target_row = 0;
+    if (term->total_lines < TERM_MAX_ROWS)
     {
-        for (int r = 0; r < TERM_ROWS - 1; r++)
+        target_row = term->total_lines;
+        term->total_lines++;
+    }
+    else
+    {
+        for (int r = 0; r < TERM_MAX_ROWS - 1; r++)
         {
             for (int c = 0; c < TERM_COLS; c++)
             {
@@ -89,8 +101,10 @@ void terminal_write_line_color(terminal_t *term, const char *text, unsigned int 
             }
             term->buffer_color[r] = term->buffer_color[r + 1];
         }
-        term->cursor_row = TERM_ROWS - 1;
+        target_row = TERM_MAX_ROWS - 1;
     }
+
+    term->scroll_offset = 0;
 
     unsigned int active_color = color;
     int c = 0;
@@ -144,12 +158,31 @@ void terminal_write_line_color(terminal_t *term, const char *text, unsigned int 
             }
         }
 
-        term->buffer[term->cursor_row][dst++] = text[c++];
+        term->buffer[target_row][dst++] = text[c++];
     }
 
-    term->buffer[term->cursor_row][dst] = '\0';
-    term->buffer_color[term->cursor_row] = active_color;
-    term->cursor_row++;
+    term->buffer[target_row][dst] = '\0';
+    term->buffer_color[target_row] = active_color;
+    term->cursor_row = (term->total_lines > TERM_VISIBLE_ROWS) ? TERM_VISIBLE_ROWS : term->total_lines;
+}
+
+void terminal_scroll_up(terminal_t *term, int lines)
+{
+    if (!term)
+        return;
+    int max_scroll = (term->total_lines > TERM_VISIBLE_ROWS) ? (term->total_lines - TERM_VISIBLE_ROWS) : 0;
+    term->scroll_offset += lines;
+    if (term->scroll_offset > max_scroll)
+        term->scroll_offset = max_scroll;
+}
+
+void terminal_scroll_down(terminal_t *term, int lines)
+{
+    if (!term)
+        return;
+    term->scroll_offset -= lines;
+    if (term->scroll_offset < 0)
+        term->scroll_offset = 0;
 }
 
 void terminal_write_line(terminal_t *term, const char *text)
@@ -162,7 +195,7 @@ void terminal_init(terminal_t *term)
     if (!term)
         return;
 
-    for (int r = 0; r < TERM_ROWS; r++)
+    for (int r = 0; r < TERM_MAX_ROWS; r++)
     {
         for (int c = 0; c < TERM_COLS; c++)
         {
@@ -170,12 +203,14 @@ void terminal_init(terminal_t *term)
         }
         term->buffer_color[r] = 0x00FF00;
     }
+    term->total_lines = 0;
+    term->scroll_offset = 0;
     term->input_len = 0;
     term->input_buf[0] = '\0';
     term->cursor_row = 0;
     term->cursor_col = 0;
 
-    terminal_write_line_color(term, "\033[36mLenovix OS Terminal v2.1\033[0m", 0x00D2FF);
+    terminal_write_line_color(term, "\033[36mLenovix OS Terminal v2.2 (Scrollable)\033[0m", 0x00D2FF);
     terminal_write_line(term, "Ketik 'help' untuk daftar perintah.");
 }
 
@@ -324,6 +359,64 @@ static void cmd_free(terminal_t *term)
     line[j] = '\0';
 
     terminal_write_line(term, line);
+}
+
+static void cmd_ps(terminal_t *term)
+{
+    task_info_t tasks[8];
+    int count = task_get_list(tasks, 8);
+    terminal_write_line_color(term, "\033[36mPID  NAME             STATUS\033[0m", 0x00D2FF);
+    char line[TERM_COLS];
+    for (int i = 0; i < count; i++)
+    {
+        char pid_str[8];
+        int_to_str(tasks[i].id, pid_str);
+        int j = 0;
+        int p = 0;
+        while (pid_str[p])
+            line[j++] = pid_str[p++];
+        while (j < 5)
+            line[j++] = ' ';
+        int n = 0;
+        while (tasks[i].name[n] && n < 16)
+            line[j++] = tasks[i].name[n++];
+        while (j < 22)
+            line[j++] = ' ';
+        const char *st = (tasks[i].state == TASK_RUNNING) ? "RUNNING" : (tasks[i].state == TASK_READY) ? "READY"
+                                                                                                       : "STOPPED";
+        int s = 0;
+        while (st[s] && j < TERM_COLS - 1)
+            line[j++] = st[s++];
+        line[j] = '\0';
+        unsigned int col = (tasks[i].state == TASK_RUNNING) ? 0x2ECC40 : (tasks[i].state == TASK_READY) ? 0xFFDC00
+                                                                                                        : 0xAAAAAA;
+        terminal_write_line_color(term, line, col);
+    }
+}
+
+static void cmd_kill(terminal_t *term, const char *args)
+{
+    while (*args == ' ')
+        args++;
+    if (*args == '\0')
+    {
+        terminal_write_line(term, "Gunakan: kill <pid>");
+        return;
+    }
+    int pid = (int)str_to_uint(args);
+    int res = task_kill(pid);
+    if (res == 0)
+    {
+        terminal_write_line_color(term, "\033[32mProses dihentikan.\033[0m", 0x2ECC40);
+    }
+    else if (res == -1)
+    {
+        terminal_write_line_color(term, "\033[31mTidak bisa mematikan kernel_main!\033[0m", 0xFF4136);
+    }
+    else
+    {
+        terminal_write_line_color(term, "\033[31mPID tidak ditemukan.\033[0m", 0xFF4136);
+    }
 }
 
 static void cmd_diskinfo(terminal_t *term)
@@ -664,29 +757,313 @@ static void cmd_netinfo(terminal_t *term)
     terminal_write_line(term, stat_line);
 }
 
-static void cmd_ping(terminal_t *term)
+static void cmd_ifconfig(terminal_t *term)
 {
     if (!rtl8139_is_present())
     {
-        terminal_write_line(term, "NIC tidak aktif untuk ping.");
+        terminal_write_line_color(term, "\033[31meth0: Device not present.\033[0m", 0xFF4136);
         return;
     }
 
+    unsigned char mac[6];
+    rtl8139_get_mac(mac);
+    const unsigned char *my_ip = net_get_my_ip();
     const unsigned char *gw = net_get_gateway_ip();
-    terminal_write_line(term, "PING 10.0.2.2 (ICMP 32B data)...");
-    net_clear_ping_reply();
-    net_send_ping(gw);
+    const unsigned char *dns = net_get_dns_server();
 
-    for (int t = 0; t < 20000; t++)
+    unsigned int tx = 0, rx = 0;
+    rtl8139_get_stats(&tx, &rx);
+
+    const char hex_chars[] = "0123456789ABCDEF";
+    char line[TERM_COLS];
+
+    terminal_write_line_color(term, "\033[36meth0: flags=UP,BROADCAST,RUNNING mtu=1500\033[0m", 0x00D2FF);
+
+    int j = 0;
+    const char *p = " inet ";
+    while (*p)
+        line[j++] = *p++;
+    char num[8];
+    for (int i = 0; i < 4; i++)
     {
-        net_poll();
-        if (net_has_ping_reply())
+        int_to_str(my_ip[i], num);
+        int s = 0;
+        while (num[s])
+            line[j++] = num[s++];
+        if (i < 3)
+            line[j++] = '.';
+    }
+    p = " netmask 255.255.255.0";
+    while (*p && j < TERM_COLS - 1)
+        line[j++] = *p++;
+    line[j] = '\0';
+    terminal_write_line(term, line);
+
+    j = 0;
+    p = " ether ";
+    while (*p)
+        line[j++] = *p++;
+    for (int i = 0; i < 6; i++)
+    {
+        line[j++] = hex_chars[(mac[i] >> 4) & 0xF];
+        line[j++] = hex_chars[mac[i] & 0xF];
+        if (i < 5)
+            line[j++] = ':';
+    }
+    line[j] = '\0';
+    terminal_write_line(term, line);
+
+    j = 0;
+    p = " gw ";
+    while (*p)
+        line[j++] = *p++;
+    for (int i = 0; i < 4; i++)
+    {
+        int_to_str(gw[i], num);
+        int s = 0;
+        while (num[s])
+            line[j++] = num[s++];
+        if (i < 3)
+            line[j++] = '.';
+    }
+    p = " dns ";
+    while (*p)
+        line[j++] = *p++;
+    for (int i = 0; i < 4; i++)
+    {
+        int_to_str(dns[i], num);
+        int s = 0;
+        while (num[s])
+            line[j++] = num[s++];
+        if (i < 3)
+            line[j++] = '.';
+    }
+    line[j] = '\0';
+    terminal_write_line(term, line);
+
+    j = 0;
+    p = " RX pkts ";
+    while (*p)
+        line[j++] = *p++;
+    int_to_str(rx, num);
+    int s = 0;
+    while (num[s])
+        line[j++] = num[s++];
+    p = " | TX pkts ";
+    while (*p)
+        line[j++] = *p++;
+    int_to_str(tx, num);
+    s = 0;
+    while (num[s])
+        line[j++] = num[s++];
+    line[j] = '\0';
+    terminal_write_line(term, line);
+}
+
+static void cmd_ping(terminal_t *term, const char *args)
+{
+    while (*args == ' ')
+        args++;
+
+    if (!rtl8139_is_present())
+    {
+        terminal_write_line_color(term, "\033[31mNIC tidak aktif untuk ping.\033[0m", 0xFF4136);
+        return;
+    }
+
+    unsigned char target_ip[4] = {10, 0, 2, 2};
+    int count = 4;
+    char host_str[32] = "10.0.2.2";
+
+    if (*args != '\0')
+    {
+        int h = 0;
+        while (*args != ' ' && *args != '\0' && h < 31)
         {
-            terminal_write_line(term, "64B from 10.0.2.2: icmp_seq=1 ttl=64");
-            return;
+            host_str[h++] = *args++;
+        }
+        host_str[h] = '\0';
+
+        while (*args == ' ')
+            args++;
+        if (*args >= '0' && *args <= '9')
+        {
+            count = (int)str_to_uint(args);
+            if (count <= 0)
+                count = 1;
+            if (count > 10)
+                count = 10;
+        }
+
+        int is_domain = 0;
+        for (int i = 0; host_str[i]; i++)
+        {
+            if ((host_str[i] >= 'a' && host_str[i] <= 'z') ||
+                (host_str[i] >= 'A' && host_str[i] <= 'Z'))
+            {
+                is_domain = 1;
+                break;
+            }
+        }
+
+        if (is_domain)
+        {
+            terminal_write_line(term, "Resolving domain via DNS...");
+            net_clear_dns_reply();
+            net_send_dns_query(host_str);
+            int resolved = 0;
+            for (int t = 0; t < 25000; t++)
+            {
+                net_poll();
+                if (net_has_dns_reply())
+                {
+                    net_get_dns_result(target_ip);
+                    resolved = 1;
+                    break;
+                }
+            }
+            if (!resolved)
+            {
+                terminal_write_line_color(term, "\033[31mDNS: Gagal resolve domain.\033[0m", 0xFF4136);
+                return;
+            }
+        }
+        else
+        {
+            const char *p = host_str;
+            for (int oct = 0; oct < 4; oct++)
+            {
+                unsigned int val = 0;
+                while (*p >= '0' && *p <= '9')
+                {
+                    val = val * 10 + (*p - '0');
+                    p++;
+                }
+                target_ip[oct] = (unsigned char)val;
+                if (*p == '.')
+                    p++;
+            }
         }
     }
-    terminal_write_line(term, "ICMP packet sent (awaiting network).");
+
+    char line[TERM_COLS];
+    char num[12];
+    int j = 0;
+    const char *p = "PING ";
+    while (*p)
+        line[j++] = *p++;
+    for (int k = 0; k < 4; k++)
+    {
+        int_to_str(target_ip[k], num);
+        int s = 0;
+        while (num[s])
+            line[j++] = num[s++];
+        if (k < 3)
+            line[j++] = '.';
+    }
+    p = " (32 bytes data)";
+    while (*p && j < TERM_COLS - 1)
+        line[j++] = *p++;
+    line[j] = '\0';
+    terminal_write_line_color(term, line, 0x00D2FF);
+
+    int received = 0;
+
+    for (int seq = 1; seq <= count; seq++)
+    {
+        net_clear_ping_reply();
+        net_send_ping_seq(target_ip, seq);
+        unsigned int t0 = timer_ticks;
+        int got_reply = 0;
+
+        for (int t = 0; t < 25000; t++)
+        {
+            net_poll();
+            if (net_has_ping_reply() && net_get_ping_reply_seq() == (unsigned short)seq)
+            {
+                unsigned int dt = timer_ticks - t0;
+                unsigned int rtt_ms = (dt == 0) ? 1 : (dt * 10);
+                received++;
+                got_reply = 1;
+
+                j = 0;
+                p = "32B seq=";
+                while (*p)
+                    line[j++] = *p++;
+                int_to_str(seq, num);
+                int s = 0;
+                while (num[s])
+                    line[j++] = num[s++];
+                p = " ttl=";
+                while (*p)
+                    line[j++] = *p++;
+                int_to_str(net_get_ping_reply_ttl(), num);
+                s = 0;
+                while (num[s])
+                    line[j++] = num[s++];
+                p = " time=";
+                while (*p)
+                    line[j++] = *p++;
+                int_to_str(rtt_ms, num);
+                s = 0;
+                while (num[s])
+                    line[j++] = num[s++];
+                p = "ms";
+                while (*p && j < TERM_COLS - 1)
+                    line[j++] = *p++;
+                line[j] = '\0';
+                terminal_write_line_color(term, line, 0x2ECC40);
+                break;
+            }
+        }
+
+        if (!got_reply)
+        {
+            j = 0;
+            p = "Request timeout seq=";
+            while (*p)
+                line[j++] = *p++;
+            int_to_str(seq, num);
+            int s = 0;
+            while (num[s])
+                line[j++] = num[s++];
+            line[j] = '\0';
+            terminal_write_line_color(term, line, 0xFF4136);
+        }
+
+        for (volatile int d = 0; d < 200000; d++)
+        {
+        }
+    }
+
+    j = 0;
+    p = "--- ";
+    while (*p)
+        line[j++] = *p++;
+    int_to_str(count, num);
+    int s = 0;
+    while (num[s])
+        line[j++] = num[s++];
+    p = " tx, ";
+    while (*p)
+        line[j++] = *p++;
+    int_to_str(received, num);
+    s = 0;
+    while (num[s])
+        line[j++] = num[s++];
+    p = " rx (";
+    while (*p)
+        line[j++] = *p++;
+    int loss = ((count - received) * 100) / count;
+    int_to_str(loss, num);
+    s = 0;
+    while (num[s])
+        line[j++] = num[s++];
+    p = "% loss) ---";
+    while (*p && j < TERM_COLS - 1)
+        line[j++] = *p++;
+    line[j] = '\0';
+    terminal_write_line(term, line);
 }
 
 static void cmd_dns(terminal_t *term, const char *domain)
@@ -747,6 +1124,480 @@ static void cmd_tarlist(terminal_t *term)
     terminal_write_line_color(term, "\033[32mStatus: Diekstrak ke VFS.\033[0m", 0x2ECC40);
 }
 
+static void cmd_curl(terminal_t *term, const char *args)
+{
+    while (*args == ' ')
+        args++;
+    if (*args == '\0')
+    {
+        terminal_write_line(term, "Gunakan: curl <ip> [port] [path]");
+        return;
+    }
+
+    if (!rtl8139_is_present())
+    {
+        terminal_write_line(term, "NIC tidak aktif.");
+        return;
+    }
+
+    unsigned char ip[4] = {0};
+    int octet = 0;
+    while (*args != ' ' && *args != '\0' && octet < 4)
+    {
+        if (*args >= '0' && *args <= '9')
+        {
+            ip[octet] = ip[octet] * 10 + (*args - '0');
+        }
+        else if (*args == '.')
+        {
+            octet++;
+        }
+        args++;
+    }
+
+    unsigned short port = 80;
+    while (*args == ' ')
+        args++;
+    if (*args >= '0' && *args <= '9')
+    {
+        port = (unsigned short)str_to_uint(args);
+        while (*args >= '0' && *args <= '9')
+            args++;
+    }
+
+    const char *path = "/";
+    while (*args == ' ')
+        args++;
+    if (*args != '\0')
+    {
+        path = args;
+    }
+
+    terminal_write_line_color(term, "\033[36mMenghubungkan TCP...\033[0m", 0x00D2FF);
+    int conn = tcp_connect(ip, port);
+    if (conn != 0)
+    {
+        terminal_write_line_color(term, "\033[31mGagal koneksi TCP / Timeout.\033[0m", 0xFF4136);
+        return;
+    }
+
+    terminal_write_line_color(term, "\033[32mTerhubung! Mengirim HTTP GET...\033[0m", 0x2ECC40);
+
+    char req[128];
+    int rlen = 0;
+    const char *p = "GET ";
+    while (*p)
+        req[rlen++] = *p++;
+    p = path;
+    while (*p && rlen < 80)
+        req[rlen++] = *p++;
+    p = " HTTP/1.0\r\nHost: host\r\n\r\n";
+    while (*p && rlen < 120)
+        req[rlen++] = *p++;
+    req[rlen] = '\0';
+
+    tcp_send(req, rlen);
+
+    char rx[512];
+    int got = 0;
+    for (int t = 0; t < 25000; t++)
+    {
+        net_poll();
+        int n = tcp_get_rx_data(rx, sizeof(rx));
+        if (n > 0)
+        {
+            got = 1;
+            char line[TERM_COLS];
+            int lidx = 0;
+            for (int i = 0; i < n && i < 120; i++)
+            {
+                if (rx[i] == '\r')
+                    continue;
+                if (rx[i] == '\n' || lidx >= TERM_COLS - 1)
+                {
+                    line[lidx] = '\0';
+                    if (lidx > 0)
+                        terminal_write_line(term, line);
+                    lidx = 0;
+                    if (rx[i] == '\n')
+                        continue;
+                }
+                line[lidx++] = rx[i];
+            }
+            if (lidx > 0)
+            {
+                line[lidx] = '\0';
+                terminal_write_line(term, line);
+            }
+            break;
+        }
+    }
+
+    tcp_close();
+    if (!got)
+    {
+        terminal_write_line(term, "TCP: Tidak ada respons data.");
+    }
+}
+
+static void cmd_rm(terminal_t *term, const char *args)
+{
+    while (*args == ' ')
+        args++;
+    if (*args == '\0')
+    {
+        terminal_write_line(term, "Gunakan: rm <nama_file>");
+        return;
+    }
+    int res = vfs_delete_file(args);
+    if (res == 0)
+    {
+        terminal_write_line_color(term, "\033[32mFile berhasil dihapus.\033[0m", 0x2ECC40);
+    }
+    else
+    {
+        terminal_write_line_color(term, "\033[31mFile tidak ditemukan.\033[0m", 0xFF4136);
+    }
+}
+
+static void cmd_cp(terminal_t *term, const char *args)
+{
+    while (*args == ' ')
+        args++;
+    char src[MAX_FILENAME_LEN];
+    char dest[MAX_FILENAME_LEN];
+    int i = 0;
+    while (*args != ' ' && *args != '\0' && i < MAX_FILENAME_LEN - 1)
+    {
+        src[i++] = *args++;
+    }
+    src[i] = '\0';
+    while (*args == ' ')
+        args++;
+    int j = 0;
+    while (*args != ' ' && *args != '\0' && j < MAX_FILENAME_LEN - 1)
+    {
+        dest[j++] = *args++;
+    }
+    dest[j] = '\0';
+
+    if (src[0] == '\0' || dest[0] == '\0')
+    {
+        terminal_write_line(term, "Gunakan: cp <source> <dest>");
+        return;
+    }
+
+    int res = vfs_copy_file(src, dest);
+    if (res == 0)
+    {
+        terminal_write_line_color(term, "\033[32mFile berhasil disalin.\033[0m", 0x2ECC40);
+    }
+    else if (res == -2)
+    {
+        terminal_write_line_color(term, "\033[31mSource file tidak ada.\033[0m", 0xFF4136);
+    }
+    else
+    {
+        terminal_write_line_color(term, "\033[31mGagal menyalin file.\033[0m", 0xFF4136);
+    }
+}
+
+static void cmd_df(terminal_t *term)
+{
+    terminal_write_line_color(term, "\033[36mFilesystem     Used     Avail  Files\033[0m", 0x00D2FF);
+
+    char line[TERM_COLS];
+    char num[16];
+
+    size_t used = vfs_get_total_used_bytes();
+    int count = vfs_get_count();
+
+    int j = 0;
+    const char *p = "vfs_ramdisk    ";
+    while (*p)
+        line[j++] = *p++;
+    int_to_str((unsigned int)used, num);
+    int s = 0;
+    while (num[s])
+        line[j++] = num[s++];
+    line[j++] = 'B';
+    while (j < 24)
+        line[j++] = ' ';
+    p = "4MB   ";
+    while (*p)
+        line[j++] = *p++;
+    int_to_str(count, num);
+    s = 0;
+    while (num[s])
+        line[j++] = num[s++];
+    p = "/32";
+    while (*p && j < TERM_COLS - 1)
+        line[j++] = *p++;
+    line[j] = '\0';
+    terminal_write_line(term, line);
+
+    j = 0;
+    p = "ata_primary    512B     ";
+    while (*p)
+        line[j++] = *p++;
+    p = ata_init() == 0 ? "ONLINE" : "NO_DISK";
+    while (*p && j < TERM_COLS - 1)
+        line[j++] = *p++;
+    line[j] = '\0';
+    terminal_write_line(term, line);
+}
+
+static void cmd_hexdump(terminal_t *term, const char *args)
+{
+    while (*args == ' ')
+        args++;
+    char fname[MAX_FILENAME_LEN];
+    int i = 0;
+    while (*args != ' ' && *args != '\0' && i < MAX_FILENAME_LEN - 1)
+    {
+        fname[i++] = *args++;
+    }
+    fname[i] = '\0';
+
+    if (fname[0] == '\0')
+    {
+        terminal_write_line(term, "Gunakan: hexdump <file> [bytes]");
+        return;
+    }
+
+    while (*args == ' ')
+        args++;
+    unsigned int max_bytes = 64;
+    if (*args >= '0' && *args <= '9')
+    {
+        max_bytes = str_to_uint(args);
+        if (max_bytes == 0)
+            max_bytes = 64;
+        if (max_bytes > 256)
+            max_bytes = 256;
+    }
+
+    vfs_node_t *f = vfs_find_file(fname);
+    const unsigned char *data = NULL;
+    unsigned int data_len = 0;
+
+    if (f && f->data)
+    {
+        data = (const unsigned char *)f->data;
+        data_len = f->length;
+    }
+
+    if (!data)
+    {
+        terminal_write_line_color(term, "\033[31mFile tidak ditemukan di VFS.\033[0m", 0xFF4136);
+        return;
+    }
+
+    if (max_bytes > data_len)
+        max_bytes = data_len;
+
+    const char hex_chars[] = "0123456789ABCDEF";
+    char line[TERM_COLS];
+
+    for (unsigned int offset = 0; offset < max_bytes; offset += 8)
+    {
+        int j = 0;
+        line[j++] = hex_chars[(offset >> 12) & 0xF];
+        line[j++] = hex_chars[(offset >> 8) & 0xF];
+        line[j++] = hex_chars[(offset >> 4) & 0xF];
+        line[j++] = hex_chars[offset & 0xF];
+        line[j++] = ':';
+        line[j++] = ' ';
+
+        for (unsigned int b = 0; b < 8; b++)
+        {
+            if (offset + b < max_bytes)
+            {
+                unsigned char byte = data[offset + b];
+                line[j++] = hex_chars[(byte >> 4) & 0xF];
+                line[j++] = hex_chars[byte & 0xF];
+                line[j++] = ' ';
+            }
+            else
+            {
+                line[j++] = ' ';
+                line[j++] = ' ';
+                line[j++] = ' ';
+            }
+        }
+
+        line[j++] = '|';
+        for (unsigned int b = 0; b < 8; b++)
+        {
+            if (offset + b < max_bytes)
+            {
+                unsigned char byte = data[offset + b];
+                line[j++] = (byte >= 32 && byte <= 126) ? (char)byte : '.';
+            }
+            else
+            {
+                line[j++] = ' ';
+            }
+        }
+        line[j++] = '|';
+        line[j] = '\0';
+
+        terminal_write_line(term, line);
+    }
+}
+
+static void cmd_date(terminal_t *term)
+{
+    rtc_time_t t = rtc_get_time();
+    static const char *months[] = {
+        "", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+    const char *mstr = (t.month >= 1 && t.month <= 12) ? months[t.month] : "---";
+
+    char line[TERM_COLS];
+    int j = 0;
+
+    line[j++] = '0' + (t.day / 10);
+    line[j++] = '0' + (t.day % 10);
+    line[j++] = ' ';
+    const char *p = mstr;
+    while (*p)
+        line[j++] = *p++;
+    line[j++] = ' ';
+
+    char yr[8];
+    int_to_str(t.year, yr);
+    int y = 0;
+    while (yr[y])
+        line[j++] = yr[y++];
+    line[j++] = ' ';
+
+    line[j++] = '0' + (t.hour / 10);
+    line[j++] = '0' + (t.hour % 10);
+    line[j++] = ':';
+    line[j++] = '0' + (t.minute / 10);
+    line[j++] = '0' + (t.minute % 10);
+    line[j++] = ':';
+    line[j++] = '0' + (t.second / 10);
+    line[j++] = '0' + (t.second % 10);
+    line[j++] = ' ';
+    line[j++] = 'U';
+    line[j++] = 'T';
+    line[j++] = 'C';
+    line[j] = '\0';
+
+    terminal_write_line_color(term, line, 0x00D2FF);
+}
+
+static void cmd_uptime(terminal_t *term)
+{
+    unsigned int total_sec = timer_ticks / 100;
+    unsigned int hrs = total_sec / 3600;
+    unsigned int mins = (total_sec % 3600) / 60;
+    unsigned int secs = total_sec % 60;
+
+    char line[TERM_COLS];
+    int j = 0;
+    const char *p = "up ";
+    while (*p)
+        line[j++] = *p++;
+
+    line[j++] = '0' + (hrs / 10);
+    line[j++] = '0' + (hrs % 10);
+    line[j++] = ':';
+    line[j++] = '0' + (mins / 10);
+    line[j++] = '0' + (mins % 10);
+    line[j++] = ':';
+    line[j++] = '0' + (secs / 10);
+    line[j++] = '0' + (secs % 10);
+
+    p = ", ticks: ";
+    while (*p)
+        line[j++] = *p++;
+
+    char num[16];
+    int_to_str(timer_ticks, num);
+    int s = 0;
+    while (num[s] && j < TERM_COLS - 1)
+        line[j++] = num[s++];
+    line[j] = '\0';
+
+    terminal_write_line_color(term, line, 0xFFDC00);
+}
+
+#define TERM_HIST_MAX 8
+static char term_history[TERM_HIST_MAX][MAX_INPUT_LEN];
+static int term_hist_count = 0;
+static int term_hist_idx = -1;
+
+static const char *known_commands[] = {
+    "help", "clear", "ver", "about", "ls", "fatls", "fatread",
+    "cat", "touch", "write", "rm", "cp", "df", "hexdump", "free",
+    "date", "uptime", "diskinfo", "diskr", "diskw",
+    "userdemo", "elfdemo", "lspci", "netinfo", "ifconfig", "ping", "dns", "curl",
+    "tarlist", "beep", "sbtest", "play", "ps", "kill", "taskdemo",
+    "reboot", "shutdown", NULL};
+
+static void terminal_autocomplete(terminal_t *term)
+{
+    if (!term || term->input_len == 0)
+        return;
+
+    int space_idx = -1;
+    for (int i = 0; i < term->input_len; i++)
+    {
+        if (term->input_buf[i] == ' ')
+        {
+            space_idx = i;
+            break;
+        }
+    }
+
+    if (space_idx == -1)
+    {
+        for (int i = 0; known_commands[i] != NULL; i++)
+        {
+            if (str_starts_with(known_commands[i], term->input_buf))
+            {
+                int k = 0;
+                while (known_commands[i][k] && k < MAX_INPUT_LEN - 1)
+                {
+                    term->input_buf[k] = known_commands[i][k];
+                    k++;
+                }
+                term->input_buf[k] = '\0';
+                term->input_len = k;
+                return;
+            }
+        }
+    }
+    else
+    {
+        const char *prefix = term->input_buf + space_idx + 1;
+        while (*prefix == ' ')
+            prefix++;
+        if (*prefix != '\0')
+        {
+            int fcount = vfs_get_count();
+            for (int i = 0; i < fcount; i++)
+            {
+                vfs_node_t *node = vfs_get_node(i);
+                if (node && str_starts_with(node->name, prefix))
+                {
+                    int k = space_idx + 1;
+                    int f = 0;
+                    while (node->name[f] && k < MAX_INPUT_LEN - 1)
+                    {
+                        term->input_buf[k++] = node->name[f++];
+                    }
+                    term->input_buf[k] = '\0';
+                    term->input_len = k;
+                    return;
+                }
+            }
+        }
+    }
+}
+
 static void terminal_execute_command(terminal_t *term)
 {
     if (!term)
@@ -765,12 +1616,46 @@ static void terminal_execute_command(terminal_t *term)
     line[i + 2] = '\0';
     terminal_write_line(term, line);
 
+    if (term->input_len > 0)
+    {
+        if (term_hist_count < TERM_HIST_MAX)
+        {
+            int k = 0;
+            while (term->input_buf[k])
+            {
+                term_history[term_hist_count][k] = term->input_buf[k];
+                k++;
+            }
+            term_history[term_hist_count][k] = '\0';
+            term_hist_count++;
+        }
+        else
+        {
+            for (int h = 0; h < TERM_HIST_MAX - 1; h++)
+            {
+                for (int k = 0; k < MAX_INPUT_LEN; k++)
+                    term_history[h][k] = term_history[h + 1][k];
+            }
+            int k = 0;
+            while (term->input_buf[k])
+            {
+                term_history[TERM_HIST_MAX - 1][k] = term->input_buf[k];
+                k++;
+            }
+            term_history[TERM_HIST_MAX - 1][k] = '\0';
+        }
+    }
+    term_hist_idx = -1;
+
     if (str_equals(term->input_buf, "help"))
     {
-        terminal_write_line(term, "Cmds: ls, cat, touch, write, free");
-        terminal_write_line(term, "      fatls, fatread, elfdemo, tarlist");
+        terminal_write_line(term, "Cmds: ls, cat, touch, write, rm, cp, df");
+        terminal_write_line(term, "      hexdump <file> [bytes], date, uptime");
+        terminal_write_line(term, "      free, fatls, fatread, tarlist");
         terminal_write_line(term, "      diskinfo, diskr, diskw, lspci");
-        terminal_write_line(term, "      netinfo, ping, dns <domain>");
+        terminal_write_line(term, "      ps, kill <pid>, taskdemo");
+        terminal_write_line(term, "      netinfo, ifconfig, ping [host] [count]");
+        terminal_write_line(term, "      dns <domain>, curl <ip> [port] [path]");
         terminal_write_line(term, "      sbtest, play <wav>, beep");
         terminal_write_line(term, "      userdemo, clear, ver, reboot");
     }
@@ -817,6 +1702,30 @@ static void terminal_execute_command(terminal_t *term)
     {
         cmd_write(term, term->input_buf + 6);
     }
+    else if (str_starts_with(term->input_buf, "rm "))
+    {
+        cmd_rm(term, term->input_buf + 3);
+    }
+    else if (str_starts_with(term->input_buf, "cp "))
+    {
+        cmd_cp(term, term->input_buf + 3);
+    }
+    else if (str_equals(term->input_buf, "df"))
+    {
+        cmd_df(term);
+    }
+    else if (str_starts_with(term->input_buf, "hexdump "))
+    {
+        cmd_hexdump(term, term->input_buf + 8);
+    }
+    else if (str_equals(term->input_buf, "date"))
+    {
+        cmd_date(term);
+    }
+    else if (str_equals(term->input_buf, "uptime"))
+    {
+        cmd_uptime(term);
+    }
     else if (str_equals(term->input_buf, "free"))
     {
         cmd_free(term);
@@ -845,17 +1754,41 @@ static void terminal_execute_command(terminal_t *term)
     {
         cmd_lspci(term);
     }
+    else if (str_equals(term->input_buf, "ps"))
+    {
+        cmd_ps(term);
+    }
+    else if (str_starts_with(term->input_buf, "kill "))
+    {
+        cmd_kill(term, term->input_buf + 5);
+    }
+    else if (str_equals(term->input_buf, "taskdemo"))
+    {
+        cmd_taskdemo();
+        terminal_write_line_color(term, "\033[32mTask A dan Task B dibuat!\033[0m", 0x2ECC40);
+    }
     else if (str_equals(term->input_buf, "netinfo"))
     {
         cmd_netinfo(term);
     }
-    else if (str_equals(term->input_buf, "ping"))
+    else if (str_equals(term->input_buf, "ifconfig"))
     {
-        cmd_ping(term);
+        cmd_ifconfig(term);
+    }
+    else if (str_equals(term->input_buf, "ping") || str_starts_with(term->input_buf, "ping "))
+    {
+        const char *args = term->input_buf + 4;
+        while (*args == ' ')
+            args++;
+        cmd_ping(term, args);
     }
     else if (str_starts_with(term->input_buf, "dns "))
     {
         cmd_dns(term, term->input_buf + 4);
+    }
+    else if (str_starts_with(term->input_buf, "curl "))
+    {
+        cmd_curl(term, term->input_buf + 5);
     }
     else if (str_equals(term->input_buf, "tarlist"))
     {
@@ -934,6 +1867,61 @@ void terminal_handle_key(terminal_t *term, char c)
     {
         terminal_execute_command(term);
     }
+    else if (c == '\t')
+    {
+        terminal_autocomplete(term);
+    }
+    else if (c == 0x11)
+    {
+        if (term_hist_count > 0)
+        {
+            if (term_hist_idx == -1)
+                term_hist_idx = term_hist_count - 1;
+            else if (term_hist_idx > 0)
+                term_hist_idx--;
+
+            int k = 0;
+            while (term_history[term_hist_idx][k])
+            {
+                term->input_buf[k] = term_history[term_hist_idx][k];
+                k++;
+            }
+            term->input_buf[k] = '\0';
+            term->input_len = k;
+        }
+    }
+    else if (c == 0x12)
+    {
+        if (term_hist_idx != -1)
+        {
+            term_hist_idx++;
+            if (term_hist_idx < term_hist_count)
+            {
+                int k = 0;
+                while (term_history[term_hist_idx][k])
+                {
+                    term->input_buf[k] = term_history[term_hist_idx][k];
+                    k++;
+                }
+                term->input_buf[k] = '\0';
+                term->input_len = k;
+            }
+            else
+            {
+                term_hist_idx = -1;
+                term->input_buf[0] = '\0';
+                term->input_len = 0;
+            }
+        }
+    }
+    else if (c == 0x13)
+    {
+        terminal_scroll_up(term, 5);
+    }
+    else if (c == 0x14)
+    {
+        terminal_scroll_down(term, 5);
+    }
     else if (c == '\b')
     {
         if (term->input_len > 0)
@@ -958,28 +1946,102 @@ void terminal_draw(terminal_t *term, int win_x, int win_y)
     if (!term)
         return;
 
-    int term_x = win_x + 10;
-    int term_y = win_y + 35;
-    int term_w = 380;
-    int term_h = 205;
+    int term_x = win_x + 8;
+    int term_y = win_y + 34;
+    int term_w = 404;
+    int term_h = 218;
 
     vesa_draw_rect(term_x, term_y, term_w, term_h, 0x000000);
 
-    for (int r = 0; r < TERM_ROWS; r++)
+    int max_scroll = (term->total_lines > TERM_VISIBLE_ROWS) ? (term->total_lines - TERM_VISIBLE_ROWS) : 0;
+    int start_line = max_scroll - term->scroll_offset;
+    if (start_line < 0)
+        start_line = 0;
+
+    for (int r = 0; r < TERM_VISIBLE_ROWS; r++)
     {
-        if (term->buffer[r][0] != '\0')
+        int line_idx = start_line + r;
+        if (line_idx < term->total_lines && term->buffer[line_idx][0] != '\0')
         {
-            vesa_draw_string(term_x + 5, term_y + 5 + (r * 18), term->buffer[r], term->buffer_color[r]);
+            vesa_draw_string(term_x + 6, term_y + 6 + (r * 18), term->buffer[line_idx], term->buffer_color[line_idx]);
         }
     }
 
-    int prompt_y = term_y + 5 + (term->cursor_row * 18);
-    if (prompt_y < term_y + term_h - 20)
-    {
-        vesa_draw_string(term_x + 5, prompt_y, ">", 0x00FF00);
-        vesa_draw_string(term_x + 20, prompt_y, term->input_buf, 0xFFFFFF);
+    int sep_y = term_y + 6 + (TERM_VISIBLE_ROWS * 18) + 2;
+    vesa_draw_rect(term_x + 4, sep_y, term_w - 24, 1, 0x222222);
 
-        int cursor_x = term_x + 20 + (term->input_len * 8);
-        vesa_draw_string(cursor_x, prompt_y, "_", 0x00FF00);
+    int prompt_y = sep_y + 5;
+    vesa_draw_string(term_x + 6, prompt_y, ">", 0x00D2FF);
+    vesa_draw_string(term_x + 20, prompt_y, term->input_buf, 0xFFFFFF);
+
+    int cursor_x = term_x + 20 + (term->input_len * 8);
+    vesa_draw_string(cursor_x, prompt_y, "_", 0x00FF88);
+
+    int sb_x = term_x + term_w - 16;
+    int sb_y = term_y + 4;
+    int sb_h = 168;
+
+    vesa_draw_rect(sb_x, sb_y, 14, sb_h, 0x1A1A1A);
+
+    vesa_draw_rect(sb_x, sb_y, 14, 14, 0x333333);
+    vesa_draw_string(sb_x + 3, sb_y, "^", 0xAAAAAA);
+
+    vesa_draw_rect(sb_x, sb_y + sb_h - 14, 14, 14, 0x333333);
+    vesa_draw_string(sb_x + 3, sb_y + sb_h - 14, "v", 0xAAAAAA);
+
+    int track_y = sb_y + 14;
+    int track_h = sb_h - 28;
+    int thumb_h = (max_scroll > 0 && term->total_lines > 0) ? (track_h * TERM_VISIBLE_ROWS) / term->total_lines : track_h;
+    if (thumb_h < 14)
+        thumb_h = 14;
+
+    int thumb_y = track_y;
+    if (max_scroll > 0)
+    {
+        thumb_y = track_y + ((track_h - thumb_h) * (max_scroll - term->scroll_offset)) / max_scroll;
     }
+    vesa_draw_rect(sb_x + 2, thumb_y, 10, thumb_h, (term->scroll_offset > 0) ? 0x0074D9 : 0x444444);
+}
+
+int terminal_handle_click(terminal_t *term, int win_x, int win_y, int mouse_x, int mouse_y)
+{
+    if (!term)
+        return 0;
+
+    int term_x = win_x + 8;
+    int term_y = win_y + 34;
+    int term_w = 404;
+    int sb_x = term_x + term_w - 16;
+    int sb_y = term_y + 4;
+    int sb_h = 168;
+
+    if (mouse_x >= sb_x && mouse_x <= sb_x + 14 && mouse_y >= sb_y && mouse_y <= sb_y + sb_h)
+    {
+        if (mouse_y <= sb_y + 14)
+        {
+            terminal_scroll_up(term, 3);
+        }
+        else if (mouse_y >= sb_y + sb_h - 14)
+        {
+            terminal_scroll_down(term, 3);
+        }
+        else
+        {
+            int track_y = sb_y + 14;
+            int track_h = sb_h - 28;
+            int click_pos = mouse_y - track_y;
+            int max_scroll = (term->total_lines > TERM_VISIBLE_ROWS) ? (term->total_lines - TERM_VISIBLE_ROWS) : 0;
+            if (max_scroll > 0)
+            {
+                int scroll_target = max_scroll - (click_pos * max_scroll) / track_h;
+                term->scroll_offset = scroll_target;
+                if (term->scroll_offset < 0)
+                    term->scroll_offset = 0;
+                if (term->scroll_offset > max_scroll)
+                    term->scroll_offset = max_scroll;
+            }
+        }
+        return 1;
+    }
+    return 0;
 }

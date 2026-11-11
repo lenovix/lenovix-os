@@ -5,7 +5,7 @@ void menu_init(start_menu_t *menu)
 {
     menu->x = 5;
     menu->width = 220;
-    menu->height = 285;
+    menu->height = 320;
     menu->y = 728 - menu->height - 5;
     menu->is_visible = 0;
 }
@@ -57,11 +57,17 @@ void menu_draw(start_menu_t *menu, int mouse_x, int mouse_y)
     vesa_draw_rect(menu->x + 5, y6, menu->width - 10, 30, h6 ? 0x2ECC40 : 0x2A2A2A);
     vesa_draw_string(menu->x + 15, y6 + 7, "[S] Snake Game", 0xFFFFFF);
 
-    // Item 7: Shutdown
+    // Item 7: Calculator
     int y7 = menu->y + 245;
     int h7 = (mouse_x >= menu->x && mouse_x <= menu->x + menu->width && mouse_y >= y7 && mouse_y <= y7 + 30);
-    vesa_draw_rect(menu->x + 5, y7, menu->width - 10, 30, h7 ? 0xFF4136 : 0x2A2A2A);
-    vesa_draw_string(menu->x + 15, y7 + 7, "[O] Shutdown", 0xFFFFFF);
+    vesa_draw_rect(menu->x + 5, y7, menu->width - 10, 30, h7 ? 0x0074D9 : 0x2A2A2A);
+    vesa_draw_string(menu->x + 15, y7 + 7, "[+] Calculator", 0xFFFFFF);
+
+    // Item 8: Shutdown
+    int y8 = menu->y + 280;
+    int h8 = (mouse_x >= menu->x && mouse_x <= menu->x + menu->width && mouse_y >= y8 && mouse_y <= y8 + 30);
+    vesa_draw_rect(menu->x + 5, y8, menu->width - 10, 30, h8 ? 0xFF4136 : 0x2A2A2A);
+    vesa_draw_string(menu->x + 15, y8 + 7, "[O] Shutdown", 0xFFFFFF);
 }
 
 int menu_handle_click(start_menu_t *menu, int mouse_x, int mouse_y)
@@ -109,7 +115,12 @@ int menu_handle_click(start_menu_t *menu, int mouse_x, int mouse_y)
     if (mouse_y >= menu->y + 245 && mouse_y <= menu->y + 275)
     {
         menu->is_visible = 0;
-        return 7; // Shutdown
+        return 7; // Calculator
+    }
+    if (mouse_y >= menu->y + 280 && mouse_y <= menu->y + 310)
+    {
+        menu->is_visible = 0;
+        return 8; // Shutdown
     }
 
     return 0;

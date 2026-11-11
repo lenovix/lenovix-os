@@ -16,11 +16,14 @@ typedef struct vfs_node
 } vfs_node_t;
 
 void init_vfs(void);
-int vfs_create_file_raw(const char *name, const char *content); // Core VFS
+int vfs_create_file_raw(const char *name, const char *content);
 vfs_node_t *vfs_find_file(const char *name);
 void vfs_list_files(void);
 int vfs_get_count(void);
 vfs_node_t *vfs_get_node(int idx);
+int vfs_delete_file(const char *name);
+int vfs_copy_file(const char *src_name, const char *dest_name);
+size_t vfs_get_total_used_bytes(void);
 
 void vfs_read_file_cmd(const char *name);
 void vfs_create_file_cmd(const char *name);

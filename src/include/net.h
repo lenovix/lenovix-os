@@ -4,6 +4,7 @@
 #define ETH_TYPE_ARP 0x0806
 #define ETH_TYPE_IPV4 0x0800
 #define IP_PROTO_ICMP 1
+#define IP_PROTO_TCP 6
 #define IP_PROTO_UDP 17
 
 typedef struct
@@ -71,6 +72,10 @@ void net_init(void);
 void net_poll(void);
 int net_send_arp(const unsigned char target_ip[4]);
 int net_send_ping(const unsigned char target_ip[4]);
+int net_send_ping_seq(const unsigned char target_ip[4], unsigned short seq);
+unsigned short net_get_ping_reply_seq(void);
+unsigned char net_get_ping_reply_ttl(void);
+int net_send_ipv4(const unsigned char target_ip[4], unsigned char protocol, const void *payload, unsigned short payload_len);
 int net_has_ping_reply(void);
 void net_clear_ping_reply(void);
 
