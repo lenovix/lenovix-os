@@ -4,6 +4,7 @@
 #include "vfs.h"
 #include "bmp.h"
 #include "task.h"
+#include "heap.h"
 
 extern terminal_t main_term;
 extern unsigned int pmm_get_free_block_count(void);
@@ -688,6 +689,317 @@ int calc_handle_click(window_t *win, int mouse_x, int mouse_y)
     return 0;
 }
 
+#define PAINT_CANVAS_W 340
+#define PAINT_CANVAS_H 160
+
+static unsigned short paint_canvas[PAINT_CANVAS_H][PAINT_CANVAS_W];
+static unsigned int paint_palette[8] = {
+    0x000000, // Black
+    0xFFFFFF, // White
+    0xFF4136, // Red
+    0x2ECC40, // Green
+    0x0074D9, // Blue
+    0xFFDC00, // Yellow
+    0x00D2FF, // Cyan
+    0xB10DC9  // Purple
+};
+static int paint_color_idx = 0;
+static int paint_brush_size = 2;
+static int paint_is_eraser = 0;
+static const char *paint_status_msg = "Brush: 2px";
+
+void paint_init(void)
+{
+    for (int y = 0; y < PAINT_CANVAS_H; y++)
+    {
+        for (int x = 0; x < PAINT_CANVAS_W; x++)
+        {
+            paint_canvas[y][x] = 0xFFFF;
+        }
+    }
+    paint_color_idx = 0;
+    paint_brush_size = 2;
+    paint_is_eraser = 0;
+    paint_status_msg = "Canvas Siap";
+}
+
+static void paint_save_to_bmp(void)
+{
+    unsigned int row_bytes = ((PAINT_CANVAS_W * 3 + 3) / 4) * 4;
+    unsigned int image_size = row_bytes * PAINT_CANVAS_H;
+    unsigned int file_size = 54 + image_size;
+
+    char *bmp_data = (char *)kmalloc(file_size);
+    if (!bmp_data)
+    {
+        paint_status_msg = "Error: Out of memory";
+        return;
+    }
+
+    bmp_file_header_t *bf = (bmp_file_header_t *)bmp_data;
+    bf->type = 0x4D42;
+    bf->size = file_size;
+    bf->reserved1 = 0;
+    bf->reserved2 = 0;
+    bf->offset = 54;
+
+    bmp_info_header_t *bi = (bmp_info_header_t *)(bmp_data + 14);
+    bi->size = 40;
+    bi->width = PAINT_CANVAS_W;
+    bi->height = PAINT_CANVAS_H;
+    bi->planes = 1;
+    bi->bpp = 24;
+    bi->compression = 0;
+    bi->image_size = image_size;
+    bi->x_ppm = 2835;
+    bi->y_ppm = 2835;
+    bi->colors_used = 0;
+    bi->colors_important = 0;
+
+    unsigned char *pix = (unsigned char *)(bmp_data + 54);
+    for (int y = 0; y < PAINT_CANVAS_H; y++)
+    {
+        int src_y = PAINT_CANVAS_H - 1 - y;
+        unsigned char *row = pix + (y * row_bytes);
+
+        for (int x = 0; x < PAINT_CANVAS_W; x++)
+        {
+            unsigned short c16 = paint_canvas[src_y][x];
+            unsigned char r, g, b;
+            if (c16 == 0xFFFF)
+            {
+                r = 255;
+                g = 255;
+                b = 255;
+            }
+            else if (c16 < 8)
+            {
+                unsigned int c32 = paint_palette[c16];
+                r = (c32 >> 16) & 0xFF;
+                g = (c32 >> 8) & 0xFF;
+                b = c32 & 0xFF;
+            }
+            else
+            {
+                r = 0;
+                g = 0;
+                b = 0;
+            }
+            row[x * 3 + 0] = b;
+            row[x * 3 + 1] = g;
+            row[x * 3 + 2] = r;
+        }
+    }
+
+    vfs_node_t *existing = vfs_find_file("drawing.bmp");
+    if (existing)
+    {
+        if (existing->data)
+            kfree(existing->data);
+        existing->data = bmp_data;
+        existing->length = file_size;
+    }
+    else
+    {
+        vfs_create_file_raw("drawing.bmp", "");
+        vfs_node_t *created = vfs_find_file("drawing.bmp");
+        if (created)
+        {
+            if (created->data)
+                kfree(created->data);
+            created->data = bmp_data;
+            created->length = file_size;
+        }
+        else
+        {
+            kfree(bmp_data);
+            paint_status_msg = "Error: VFS Save";
+            return;
+        }
+    }
+    paint_status_msg = "Saved: drawing.bmp";
+}
+
+static void draw_paint_app(window_t *win)
+{
+    int app_x = win->x + 8;
+    int app_y = win->y + 34;
+    int app_w = win->width - 16;
+    int app_h = win->height - 42;
+
+    vesa_draw_rect(app_x, app_y, app_w, app_h, 0x222222);
+
+    int tb_y = app_y + 4;
+    vesa_draw_rect(app_x + 4, tb_y, app_w - 8, 30, 0x1A1A1A);
+
+    for (int i = 0; i < 8; i++)
+    {
+        int px = app_x + 8 + (i * 22);
+        int py = tb_y + 6;
+        vesa_draw_rect(px, py, 18, 18, paint_palette[i]);
+        if (!paint_is_eraser && paint_color_idx == i)
+        {
+            vesa_draw_rect(px - 1, py - 1, 20, 1, 0xFFFFFF);
+            vesa_draw_rect(px - 1, py + 18, 20, 1, 0xFFFFFF);
+            vesa_draw_rect(px - 1, py, 1, 18, 0xFFFFFF);
+            vesa_draw_rect(px + 18, py, 1, 18, 0xFFFFFF);
+        }
+    }
+
+    int bx1 = app_x + 190;
+    vesa_draw_rect(bx1, tb_y + 5, 26, 20, (paint_brush_size == 1 && !paint_is_eraser) ? 0x0074D9 : 0x333333);
+    vesa_draw_string(bx1 + 7, tb_y + 7, "1p", 0xFFFFFF);
+
+    int bx2 = app_x + 220;
+    vesa_draw_rect(bx2, tb_y + 5, 26, 20, (paint_brush_size == 2 && !paint_is_eraser) ? 0x0074D9 : 0x333333);
+    vesa_draw_string(bx2 + 7, tb_y + 7, "2p", 0xFFFFFF);
+
+    int bx4 = app_x + 250;
+    vesa_draw_rect(bx4, tb_y + 5, 26, 20, (paint_brush_size == 4 && !paint_is_eraser) ? 0x0074D9 : 0x333333);
+    vesa_draw_string(bx4 + 7, tb_y + 7, "4p", 0xFFFFFF);
+
+    int er_x = app_x + 282;
+    vesa_draw_rect(er_x, tb_y + 5, 30, 20, paint_is_eraser ? 0xFFDC00 : 0x333333);
+    vesa_draw_string(er_x + 5, tb_y + 7, "Era", paint_is_eraser ? 0x000000 : 0xFFFFFF);
+
+    int clr_x = app_x + 316;
+    vesa_draw_rect(clr_x, tb_y + 5, 38, 20, 0xFF4136);
+    vesa_draw_string(clr_x + 5, tb_y + 7, "Clr", 0xFFFFFF);
+
+    int save_x = app_x + 358;
+    vesa_draw_rect(save_x, tb_y + 5, 42, 20, 0x2ECC40);
+    vesa_draw_string(save_x + 5, tb_y + 7, "Save", 0xFFFFFF);
+
+    int cv_x = app_x + 32;
+    int cv_y = app_y + 38;
+    vesa_draw_rect(cv_x - 1, cv_y - 1, PAINT_CANVAS_W + 2, PAINT_CANVAS_H + 2, 0x000000);
+
+    for (int y = 0; y < PAINT_CANVAS_H; y++)
+    {
+        for (int x = 0; x < PAINT_CANVAS_W; x++)
+        {
+            unsigned short c16 = paint_canvas[y][x];
+            unsigned int col = 0xFFFFFF;
+            if (c16 < 8)
+            {
+                col = paint_palette[c16];
+            }
+            vesa_put_pixel(cv_x + x, cv_y + y, col);
+        }
+    }
+
+    int st_y = app_y + app_h - 20;
+    vesa_draw_rect(app_x + 4, st_y, app_w - 8, 18, 0x111111);
+    vesa_draw_string(app_x + 10, st_y + 2, paint_status_msg, 0x00D2FF);
+}
+
+int paint_handle_mouse(window_t *win, int mouse_x, int mouse_y, unsigned char left_btn)
+{
+    if (win->app_type != WIN_APP_PAINT || !win->is_visible)
+        return 0;
+
+    int app_x = win->x + 8;
+    int app_y = win->y + 34;
+    int tb_y = app_y + 4;
+
+    if (left_btn && mouse_y >= tb_y + 4 && mouse_y <= tb_y + 26)
+    {
+        for (int i = 0; i < 8; i++)
+        {
+            int px = app_x + 8 + (i * 22);
+            if (mouse_x >= px && mouse_x <= px + 18)
+            {
+                paint_color_idx = i;
+                paint_is_eraser = 0;
+                paint_status_msg = "Warna dipilih";
+                return 1;
+            }
+        }
+
+        int bx1 = app_x + 190;
+        if (mouse_x >= bx1 && mouse_x <= bx1 + 26)
+        {
+            paint_brush_size = 1;
+            paint_is_eraser = 0;
+            paint_status_msg = "Kuas: 1px";
+            return 1;
+        }
+
+        int bx2 = app_x + 220;
+        if (mouse_x >= bx2 && mouse_x <= bx2 + 26)
+        {
+            paint_brush_size = 2;
+            paint_is_eraser = 0;
+            paint_status_msg = "Kuas: 2px";
+            return 1;
+        }
+
+        int bx4 = app_x + 250;
+        if (mouse_x >= bx4 && mouse_x <= bx4 + 26)
+        {
+            paint_brush_size = 4;
+            paint_is_eraser = 0;
+            paint_status_msg = "Kuas: 4px";
+            return 1;
+        }
+
+        int er_x = app_x + 282;
+        if (mouse_x >= er_x && mouse_x <= er_x + 30)
+        {
+            paint_is_eraser = 1;
+            paint_status_msg = "Mode: Penghapus";
+            return 1;
+        }
+
+        int clr_x = app_x + 316;
+        if (mouse_x >= clr_x && mouse_x <= clr_x + 38)
+        {
+            for (int y = 0; y < PAINT_CANVAS_H; y++)
+                for (int x = 0; x < PAINT_CANVAS_W; x++)
+                    paint_canvas[y][x] = 0xFFFF;
+            paint_status_msg = "Kanvas dibersihkan";
+            return 1;
+        }
+
+        int save_x = app_x + 358;
+        if (mouse_x >= save_x && mouse_x <= save_x + 42)
+        {
+            paint_save_to_bmp();
+            return 1;
+        }
+    }
+
+    int cv_x = app_x + 32;
+    int cv_y = app_y + 38;
+
+    if (left_btn &&
+        mouse_x >= cv_x && mouse_x < cv_x + PAINT_CANVAS_W &&
+        mouse_y >= cv_y && mouse_y < cv_y + PAINT_CANVAS_H)
+    {
+        int cx = mouse_x - cv_x;
+        int cy = mouse_y - cv_y;
+        unsigned short fill_val = paint_is_eraser ? 0xFFFF : (unsigned short)paint_color_idx;
+
+        int r = (paint_brush_size == 1) ? 0 : (paint_brush_size == 2) ? 1
+                                                                      : 2;
+        for (int dy = -r; dy <= r; dy++)
+        {
+            for (int dx = -r; dx <= r; dx++)
+            {
+                int px = cx + dx;
+                int py = cy + dy;
+                if (px >= 0 && px < PAINT_CANVAS_W && py >= 0 && py < PAINT_CANVAS_H)
+                {
+                    paint_canvas[py][px] = fill_val;
+                }
+            }
+        }
+        return 1;
+    }
+
+    return 0;
+}
+
 void window_draw(window_t *win)
 {
     if (!win->is_visible)
@@ -729,6 +1041,10 @@ void window_draw(window_t *win)
     {
         draw_calc_app(win);
     }
+    else if (win->app_type == WIN_APP_PAINT)
+    {
+        draw_paint_app(win);
+    }
 }
 
 void window_handle_mouse(window_t *win, int mouse_x, int mouse_y, unsigned char left_btn)
@@ -757,6 +1073,14 @@ void window_handle_mouse(window_t *win, int mouse_x, int mouse_y, unsigned char 
             if (win->app_type == WIN_APP_TERMINAL)
             {
                 if (terminal_handle_click(&main_term, win->x, win->y, mouse_x, mouse_y))
+                {
+                    return;
+                }
+            }
+
+            if (win->app_type == WIN_APP_PAINT)
+            {
+                if (paint_handle_mouse(win, mouse_x, mouse_y, left_btn))
                 {
                     return;
                 }

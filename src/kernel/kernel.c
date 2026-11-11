@@ -84,7 +84,7 @@ void isr_syscall_handler(unsigned int syscall_num, unsigned int arg1)
     }
 }
 
-#define MAX_WINDOWS 7
+#define MAX_WINDOWS 8
 static window_t windows[MAX_WINDOWS];
 static int active_win = 0;
 static start_menu_t start_menu;
@@ -181,6 +181,8 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info)
     snake_init();
     window_init(&windows[6], 350, 150, 240, 260, "Calculator", WIN_APP_CALC);
     calc_init();
+    window_init(&windows[7], 180, 80, 420, 260, "Paint Studio", WIN_APP_PAINT);
+    paint_init();
     menu_init(&start_menu);
 
     mouse_state_t *mouse = mouse_get_state();
@@ -249,13 +251,13 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info)
             else if (start_menu.is_visible)
             {
                 int action = menu_handle_click(&start_menu, mouse->x, mouse->y);
-                if (action >= 1 && action <= 7)
+                if (action >= 1 && action <= 8)
                 {
                     windows[action - 1].is_visible = 1;
                     active_win = action - 1;
                     start_menu.is_visible = 0;
                 }
-                else if (action == 8)
+                else if (action == 9)
                 {
                     acpi_power_off();
                 }
@@ -315,6 +317,14 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info)
         }
 
         prev_start_click = mouse->left_button;
+
+        if (mouse->left_button && active_win == 7 && windows[7].is_visible && !windows[7].is_dragging)
+        {
+            if (paint_handle_mouse(&windows[7], mouse->x, mouse->y, mouse->left_button))
+            {
+                render_desktop(mouse);
+            }
+        }
 
         int any_dragging = (active_win >= 0 && active_win < MAX_WINDOWS && windows[active_win].is_dragging);
         if (mouse->x != last_x || mouse->y != last_y || mouse->left_button != last_btn || any_dragging)

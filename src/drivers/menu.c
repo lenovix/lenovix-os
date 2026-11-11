@@ -5,7 +5,7 @@ void menu_init(start_menu_t *menu)
 {
     menu->x = 5;
     menu->width = 220;
-    menu->height = 320;
+    menu->height = 355;
     menu->y = 728 - menu->height - 5;
     menu->is_visible = 0;
 }
@@ -63,11 +63,17 @@ void menu_draw(start_menu_t *menu, int mouse_x, int mouse_y)
     vesa_draw_rect(menu->x + 5, y7, menu->width - 10, 30, h7 ? 0x0074D9 : 0x2A2A2A);
     vesa_draw_string(menu->x + 15, y7 + 7, "[+] Calculator", 0xFFFFFF);
 
-    // Item 8: Shutdown
+    // Item 8: Paint Studio
     int y8 = menu->y + 280;
     int h8 = (mouse_x >= menu->x && mouse_x <= menu->x + menu->width && mouse_y >= y8 && mouse_y <= y8 + 30);
-    vesa_draw_rect(menu->x + 5, y8, menu->width - 10, 30, h8 ? 0xFF4136 : 0x2A2A2A);
-    vesa_draw_string(menu->x + 15, y8 + 7, "[O] Shutdown", 0xFFFFFF);
+    vesa_draw_rect(menu->x + 5, y8, menu->width - 10, 30, h8 ? 0x00D2FF : 0x2A2A2A);
+    vesa_draw_string(menu->x + 15, y8 + 7, "[P] Paint Studio", 0xFFFFFF);
+
+    // Item 9: Shutdown
+    int y9 = menu->y + 315;
+    int h9 = (mouse_x >= menu->x && mouse_x <= menu->x + menu->width && mouse_y >= y9 && mouse_y <= y9 + 30);
+    vesa_draw_rect(menu->x + 5, y9, menu->width - 10, 30, h9 ? 0xFF4136 : 0x2A2A2A);
+    vesa_draw_string(menu->x + 15, y9 + 7, "[O] Shutdown", 0xFFFFFF);
 }
 
 int menu_handle_click(start_menu_t *menu, int mouse_x, int mouse_y)
@@ -120,7 +126,12 @@ int menu_handle_click(start_menu_t *menu, int mouse_x, int mouse_y)
     if (mouse_y >= menu->y + 280 && mouse_y <= menu->y + 310)
     {
         menu->is_visible = 0;
-        return 8; // Shutdown
+        return 8; // Paint Studio
+    }
+    if (mouse_y >= menu->y + 315 && mouse_y <= menu->y + 345)
+    {
+        menu->is_visible = 0;
+        return 9; // Shutdown
     }
 
     return 0;

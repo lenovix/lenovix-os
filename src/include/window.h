@@ -8,6 +8,7 @@
 #define WIN_APP_VIEWER 4
 #define WIN_APP_GAME 5
 #define WIN_APP_CALC 6
+#define WIN_APP_PAINT 7
 
 typedef struct
 {
@@ -39,5 +40,8 @@ void snake_handle_key(char c);
 void calc_init(void);
 void calc_handle_key(char c);
 int calc_handle_click(window_t *win, int mouse_x, int mouse_y);
+
+void paint_init(void);
+int paint_handle_mouse(window_t *win, int mouse_x, int mouse_y, unsigned char left_btn);
 
 #endif
