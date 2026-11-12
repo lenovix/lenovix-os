@@ -1049,6 +1049,10 @@ void window_draw(window_t *win)
     {
         player_draw(win);
     }
+    else if (win->app_type == WIN_APP_BROWSER)
+    {
+        browser_draw(win);
+    }
 }
 
 void window_handle_mouse(window_t *win, int mouse_x, int mouse_y, unsigned char left_btn)

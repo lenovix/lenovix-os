@@ -186,6 +186,21 @@ void init_vfs(void)
     vfs_create_file_binary("sample.mp3", mp3_buf, 834);
 
     vfs_create_file_raw("retro.mod", "CHIPTUNE_TRACK_V1");
+    vfs_create_file_raw("index.html",
+                        "<html><head><title>Lenovix OS Home</title></head><body>"
+                        "<h1>Lenovix OS Documentation</h1>"
+                        "<p>Selamat datang di sistem operasi mandiri Lenovix OS.</p>"
+                        "<hr>"
+                        "<h2>Fitur Utama:</h2>"
+                        "<ul>"
+                        "<li><b>Terminal & VFS:</b> Perintah lengkap, pipeline & redirect.</li>"
+                        "<li><b>BASIC Interpreter:</b> Menulis dan menjalankan skrip BASIC.</li>"
+                        "<li><b>Media Player:</b> Pemutar musik WAV, MP3, MOD & Visualizer.</li>"
+                        "<li><b>Web Browser:</b> Peramban web HTML & HTTP Client.</li>"
+                        "</ul>"
+                        "<hr>"
+                        "<p><a href=\"about:lenovix\">Kembali ke Portal Browser</a></p>"
+                        "</body></html>");
 }
 
 vfs_node_t *vfs_find_file(const char *name)

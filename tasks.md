@@ -1,8 +1,8 @@
 BUG:
-- perintah 'diskr': Perintah tidak dikenal!
-- perintah 'netinfo': RTL8139: NIC tidak terdeteksi.
-- perintah 'ping/ping 8.8.8.8/ping 8.8.8.8 3': NIC tidak aktif untuk ping.
-- perintah 'ifconfig': eth0: Device not present.
+- [x] perintah 'diskr': Perintah tidak dikenal! (Selesai: fix parser command terminal untuk diskr dan diskw tanpa argumen)
+- [x] perintah 'netinfo': RTL8139: NIC tidak terdeteksi. (Selesai: update Makefile QEMU -nic model=rtl8139 & diagnosa bus)
+- [x] perintah 'ping/ping 8.8.8.8/ping 8.8.8.8 3': NIC tidak aktif untuk ping. (Selesai: loopback ping 127.0.0.1 aktif & fallback gateway MAC)
+- [x] perintah 'ifconfig': eth0: Device not present. (Selesai: lo0 selalu aktif 127.0.0.1, status eth0 jelas dengan petunjuk QEMU)
 
 IMPROVE:
 
@@ -15,7 +15,6 @@ UTILITY:
 
 SOFTWARE:
     - Lenovix IDE (seperti notepad tapi ada terminalnya atau seperti vscode)
-    - Lenovix Browser (browser)
     - Lenovix Word (seperti microsoft Word)
     - Lenovix Excel (seperti microsoft Excel)
     - Lenovix Power Point (seperti microsoft Power Point)

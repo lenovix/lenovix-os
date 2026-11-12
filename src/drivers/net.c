@@ -5,7 +5,7 @@ static unsigned char my_ip[4] = {10, 0, 2, 15};
 static unsigned char gateway_ip[4] = {10, 0, 2, 2};
 static unsigned char dns_server_ip[4] = {10, 0, 2, 3};
 static unsigned char gateway_mac[6] = {0x52, 0x54, 0x00, 0x12, 0x34, 0x56};
-static int has_gateway_mac = 0;
+static int has_gateway_mac = 1;
 static int ping_reply_received = 0;
 static unsigned short ping_reply_seq = 0;
 static unsigned char ping_reply_ttl = 64;
@@ -135,6 +135,16 @@ unsigned char net_get_ping_reply_ttl(void)
 
 int net_send_ping_seq(const unsigned char target_ip[4], unsigned short seq)
 {
+    if (target_ip[0] == 127 ||
+        (target_ip[0] == my_ip[0] && target_ip[1] == my_ip[1] &&
+         target_ip[2] == my_ip[2] && target_ip[3] == my_ip[3]))
+    {
+        ping_reply_received = 1;
+        ping_reply_seq = seq;
+        ping_reply_ttl = 64;
+        return 0;
+    }
+
     unsigned int total_len = sizeof(eth_header_t) + sizeof(ipv4_header_t) + sizeof(icmp_header_t) + 32;
     unsigned char frame[128];
 

@@ -5,7 +5,7 @@ void menu_init(start_menu_t *menu)
 {
     menu->x = 5;
     menu->width = 220;
-    menu->height = 390;
+    menu->height = 425;
     menu->y = 728 - menu->height - 5;
     menu->is_visible = 0;
 }
@@ -75,11 +75,17 @@ void menu_draw(start_menu_t *menu, int mouse_x, int mouse_y)
     vesa_draw_rect(menu->x + 5, y9, menu->width - 10, 30, h9 ? 0x2ECC40 : 0x2A2A2A);
     vesa_draw_string(menu->x + 15, y9 + 7, "[M] Media Player", 0xFFFFFF);
 
-    // Item 10: Shutdown
+    // Item 10: Web Browser
     int y10 = menu->y + 350;
     int h10 = (mouse_x >= menu->x && mouse_x <= menu->x + menu->width && mouse_y >= y10 && mouse_y <= y10 + 30);
-    vesa_draw_rect(menu->x + 5, y10, menu->width - 10, 30, h10 ? 0xFF4136 : 0x2A2A2A);
-    vesa_draw_string(menu->x + 15, y10 + 7, "[O] Shutdown", 0xFFFFFF);
+    vesa_draw_rect(menu->x + 5, y10, menu->width - 10, 30, h10 ? 0x0074D9 : 0x2A2A2A);
+    vesa_draw_string(menu->x + 15, y10 + 7, "[W] Web Browser", 0xFFFFFF);
+
+    // Item 11: Shutdown
+    int y11 = menu->y + 385;
+    int h11 = (mouse_x >= menu->x && mouse_x <= menu->x + menu->width && mouse_y >= y11 && mouse_y <= y11 + 30);
+    vesa_draw_rect(menu->x + 5, y11, menu->width - 10, 30, h11 ? 0xFF4136 : 0x2A2A2A);
+    vesa_draw_string(menu->x + 15, y11 + 7, "[O] Shutdown", 0xFFFFFF);
 }
 
 int menu_handle_click(start_menu_t *menu, int mouse_x, int mouse_y)
@@ -142,7 +148,12 @@ int menu_handle_click(start_menu_t *menu, int mouse_x, int mouse_y)
     if (mouse_y >= menu->y + 350 && mouse_y <= menu->y + 380)
     {
         menu->is_visible = 0;
-        return 10; // Shutdown
+        return 10; // Web Browser
+    }
+    if (mouse_y >= menu->y + 385 && mouse_y <= menu->y + 415)
+    {
+        menu->is_visible = 0;
+        return 11; // Shutdown
     }
 
     return 0;

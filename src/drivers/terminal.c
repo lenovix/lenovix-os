@@ -20,6 +20,7 @@
 #include "basic.h"
 #include "audio_codec.h"
 #include "window.h"
+#include "browser.h"
 
 extern void cmd_taskdemo(void);
 extern unsigned int timer_ticks;
@@ -1118,7 +1119,8 @@ static void cmd_netinfo(terminal_t *term)
 {
     if (!rtl8139_is_present())
     {
-        terminal_write_line(term, "RTL8139: NIC tidak terdeteksi.");
+        terminal_write_line(term, "RTL8139: NIC tidak terdeteksi di bus PCI.");
+        terminal_write_line(term, "Info: Pastikan QEMU pakai opsi: -nic model=rtl8139");
         return;
     }
 
@@ -1166,9 +1168,12 @@ static void cmd_netinfo(terminal_t *term)
 
 static void cmd_ifconfig(terminal_t *term)
 {
+    terminal_write_line_color(term, "\033[36mlo0: flags=UP,LOOPBACK mtu=65536\033[0m", 0x00D2FF);
+    terminal_write_line(term, " inet 127.0.0.1 netmask 255.0.0.0");
+
     if (!rtl8139_is_present())
     {
-        terminal_write_line_color(term, "\033[31meth0: Device not present.\033[0m", 0xFF4136);
+        terminal_write_line_color(term, "\033[31meth0: DOWN (Tambahkan '-nic model=rtl8139' di QEMU)\033[0m", 0xFF4136);
         return;
     }
 
@@ -1272,12 +1277,6 @@ static void cmd_ping(terminal_t *term, const char *args)
     while (*args == ' ')
         args++;
 
-    if (!rtl8139_is_present())
-    {
-        terminal_write_line_color(term, "\033[31mNIC tidak aktif untuk ping.\033[0m", 0xFF4136);
-        return;
-    }
-
     unsigned char target_ip[4] = {10, 0, 2, 2};
     int count = 4;
     char host_str[32] = "10.0.2.2";
@@ -1313,8 +1312,21 @@ static void cmd_ping(terminal_t *term, const char *args)
             }
         }
 
-        if (is_domain)
+        if (str_equals(host_str, "127.0.0.1") || str_equals(host_str, "localhost"))
         {
+            target_ip[0] = 127;
+            target_ip[1] = 0;
+            target_ip[2] = 0;
+            target_ip[3] = 1;
+            is_domain = 0;
+        }
+        else if (is_domain)
+        {
+            if (!rtl8139_is_present())
+            {
+                terminal_write_line_color(term, "\033[31meth0 tidak aktif untuk resolve DNS.\033[0m", 0xFF4136);
+                return;
+            }
             terminal_write_line(term, "Resolving domain via DNS...");
             net_clear_dns_reply();
             net_send_dns_query(host_str);
@@ -1351,6 +1363,14 @@ static void cmd_ping(terminal_t *term, const char *args)
                     p++;
             }
         }
+    }
+
+    int is_loopback = (target_ip[0] == 127);
+    if (!rtl8139_is_present() && !is_loopback)
+    {
+        terminal_write_line_color(term, "\033[31meth0 tidak aktif. Tambahkan '-nic model=rtl8139' di QEMU.\033[0m", 0xFF4136);
+        terminal_write_line(term, "Tip: ping 127.0.0.1 (loopback) tetap aktif.");
+        return;
     }
 
     char line[TERM_COLS];
@@ -1942,7 +1962,7 @@ static const char *known_commands[] = {
     "date", "uptime", "uname", "systeminfo", "diskinfo", "diskr", "diskw",
     "userdemo", "elfdemo", "lspci", "netinfo", "ifconfig", "ping", "dns", "curl",
     "tarlist", "beep", "sbtest", "play", "player", "ps", "kill", "taskdemo",
-    "basic", "reboot", "shutdown", NULL};
+    "basic", "browser", "reboot", "shutdown", NULL};
 
 static void terminal_autocomplete(terminal_t *term)
 {
@@ -2084,7 +2104,7 @@ static void terminal_execute_command(terminal_t *term)
         terminal_write_line(term, "      netinfo, ifconfig, ping [host] [count]");
         terminal_write_line(term, "      dns <domain>, curl <ip> [port] [path]");
         terminal_write_line(term, "      sbtest, play <file>, player, beep, basic");
-        terminal_write_line(term, "      userdemo, clear, ver, reboot");
+        terminal_write_line(term, "      browser [url], userdemo, clear, ver");
     }
     else if (str_equals(term->input_buf, "clear"))
     {
@@ -2187,13 +2207,19 @@ static void terminal_execute_command(terminal_t *term)
     {
         cmd_diskinfo(term);
     }
-    else if (str_starts_with(term->input_buf, "diskr "))
+    else if (str_equals(term->input_buf, "diskr") || str_starts_with(term->input_buf, "diskr "))
     {
-        cmd_diskr(term, term->input_buf + 6);
+        const char *dargs = term->input_buf + 5;
+        while (*dargs == ' ')
+            dargs++;
+        cmd_diskr(term, dargs);
     }
-    else if (str_starts_with(term->input_buf, "diskw "))
+    else if (str_equals(term->input_buf, "diskw") || str_starts_with(term->input_buf, "diskw "))
     {
-        cmd_diskw(term, term->input_buf + 6);
+        const char *dargs = term->input_buf + 5;
+        while (*dargs == ' ')
+            dargs++;
+        cmd_diskw(term, dargs);
     }
     else if (str_equals(term->input_buf, "userdemo"))
     {
@@ -2295,6 +2321,18 @@ static void terminal_execute_command(terminal_t *term)
     {
         window_show_player();
         terminal_write_line(term, "Membuka Media Player & Spectrum Visualizer...");
+    }
+    else if (str_equals(term->input_buf, "browser") || str_starts_with(term->input_buf, "browser "))
+    {
+        const char *burl = term->input_buf + 7;
+        while (*burl == ' ')
+            burl++;
+        window_show_browser();
+        if (*burl != '\0')
+        {
+            browser_navigate(burl);
+        }
+        terminal_write_line(term, "Membuka Lenovix Browser...");
     }
     else if (str_equals(term->input_buf, "basic") || str_starts_with(term->input_buf, "basic "))
     {

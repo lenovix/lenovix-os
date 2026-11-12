@@ -25,6 +25,7 @@
 #include "basic.h"
 #include "audio_codec.h"
 #include "player.h"
+#include "browser.h"
 
 extern void init_gdt(void);
 extern void init_idt(void);
@@ -87,7 +88,7 @@ void isr_syscall_handler(unsigned int syscall_num, unsigned int arg1)
     }
 }
 
-#define MAX_WINDOWS 9
+#define MAX_WINDOWS 10
 static window_t windows[MAX_WINDOWS];
 static int active_win = 0;
 static start_menu_t start_menu;
@@ -96,6 +97,12 @@ void window_show_player(void)
 {
     windows[8].is_visible = 1;
     active_win = 8;
+}
+
+void window_show_browser(void)
+{
+    windows[9].is_visible = 1;
+    active_win = 9;
 }
 
 void render_desktop(mouse_state_t *mouse)
@@ -195,6 +202,8 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info)
     paint_init();
     window_init(&windows[8], 260, 140, 440, 270, "Media Player", WIN_APP_PLAYER);
     player_init();
+    window_init(&windows[9], 220, 100, 480, 310, "Lenovix Browser", WIN_APP_BROWSER);
+    browser_init();
     menu_init(&start_menu);
 
     mouse_state_t *mouse = mouse_get_state();
@@ -244,6 +253,11 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info)
                 player_handle_key(key);
                 render_desktop(mouse);
             }
+            else if (active_win == 9 && windows[9].is_visible)
+            {
+                browser_handle_key(key);
+                render_desktop(mouse);
+            }
         }
 
         if (windows[5].is_visible)
@@ -279,13 +293,13 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info)
             else if (start_menu.is_visible)
             {
                 int action = menu_handle_click(&start_menu, mouse->x, mouse->y);
-                if (action >= 1 && action <= 9)
+                if (action >= 1 && action <= 10)
                 {
                     windows[action - 1].is_visible = 1;
                     active_win = action - 1;
                     start_menu.is_visible = 0;
                 }
-                else if (action == 10)
+                else if (action == 11)
                 {
                     acpi_power_off();
                 }
@@ -356,6 +370,13 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info)
         else if (mouse->left_button && active_win == 8 && windows[8].is_visible && !windows[8].is_dragging)
         {
             if (player_handle_click(&windows[8], mouse->x, mouse->y))
+            {
+                render_desktop(mouse);
+            }
+        }
+        else if (mouse->left_button && active_win == 9 && windows[9].is_visible && !windows[9].is_dragging)
+        {
+            if (browser_handle_click(&windows[9], mouse->x, mouse->y))
             {
                 render_desktop(mouse);
             }

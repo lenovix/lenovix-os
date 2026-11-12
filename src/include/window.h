@@ -10,6 +10,7 @@
 #define WIN_APP_CALC 6
 #define WIN_APP_PAINT 7
 #define WIN_APP_PLAYER 8
+#define WIN_APP_BROWSER 9
 
 typedef struct
 {
@@ -50,5 +51,12 @@ void player_draw(window_t *win);
 int player_handle_click(window_t *win, int mouse_x, int mouse_y);
 void player_handle_key(char c);
 void window_show_player(void);
+
+void browser_init(void);
+void browser_draw(window_t *win);
+int browser_handle_click(window_t *win, int mouse_x, int mouse_y);
+void browser_handle_key(char c);
+void browser_navigate(const char *url);
+void window_show_browser(void);
 
 #endif

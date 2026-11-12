@@ -41,6 +41,8 @@ OBJS = $(BUILD_DIR)/boot.o \
        $(BUILD_DIR)/basic.o \
        $(BUILD_DIR)/audio_codec.o \
        $(BUILD_DIR)/player.o \
+       $(BUILD_DIR)/html_parser.o \
+       $(BUILD_DIR)/browser.o \
        $(BUILD_DIR)/shell.o
 
 .PHONY: all clean run
@@ -186,6 +188,14 @@ $(BUILD_DIR)/player.o: src/drivers/player.c
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) $< -o $@
 
+$(BUILD_DIR)/html_parser.o: src/kernel/html_parser.c
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/browser.o: src/drivers/browser.c
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) $< -o $@
+
 $(BUILD_DIR)/shell.o: src/shell/shell.c
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) $< -o $@
@@ -205,4 +215,4 @@ clean:
 	rm -rf $(BUILD_DIR) iso lenovix.iso *.o lenovix.bin
 
 run: lenovix.iso
-	qemu-system-i386 -cdrom lenovix.iso -vga std
+	qemu-system-i386 -cdrom lenovix.iso -vga std -nic model=rtl8139 -soundhw sb16
