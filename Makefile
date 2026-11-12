@@ -215,4 +215,4 @@ clean:
 	rm -rf $(BUILD_DIR) iso lenovix.iso *.o lenovix.bin
 
 run: lenovix.iso
-	qemu-system-i386 -cdrom lenovix.iso -vga std -nic model=rtl8139 -soundhw sb16
+	qemu-system-i386 -cdrom lenovix.iso -vga std -nic model=rtl8139 -audiodev sdl,id=snd0 -device sb16,audiodev=snd0
