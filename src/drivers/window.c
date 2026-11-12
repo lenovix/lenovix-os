@@ -1045,6 +1045,10 @@ void window_draw(window_t *win)
     {
         draw_paint_app(win);
     }
+    else if (win->app_type == WIN_APP_PLAYER)
+    {
+        player_draw(win);
+    }
 }
 
 void window_handle_mouse(window_t *win, int mouse_x, int mouse_y, unsigned char left_btn)

@@ -20,4 +20,3 @@ SOFTWARE:
     - Lenovix Excel (seperti microsoft Excel)
     - Lenovix Power Point (seperti microsoft Power Point)
     - Retro Game Console (Pong, Tetris, Space Invaders)
-    - Media Player & Spectrum Visualizer

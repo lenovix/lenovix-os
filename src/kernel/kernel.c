@@ -23,6 +23,8 @@
 #include "tar.h"
 #include "tcp.h"
 #include "basic.h"
+#include "audio_codec.h"
+#include "player.h"
 
 extern void init_gdt(void);
 extern void init_idt(void);
@@ -85,10 +87,16 @@ void isr_syscall_handler(unsigned int syscall_num, unsigned int arg1)
     }
 }
 
-#define MAX_WINDOWS 8
+#define MAX_WINDOWS 9
 static window_t windows[MAX_WINDOWS];
 static int active_win = 0;
 static start_menu_t start_menu;
+
+void window_show_player(void)
+{
+    windows[8].is_visible = 1;
+    active_win = 8;
+}
 
 void render_desktop(mouse_state_t *mouse)
 {
@@ -185,6 +193,8 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info)
     calc_init();
     window_init(&windows[7], 180, 80, 420, 260, "Paint Studio", WIN_APP_PAINT);
     paint_init();
+    window_init(&windows[8], 260, 140, 440, 270, "Media Player", WIN_APP_PLAYER);
+    player_init();
     menu_init(&start_menu);
 
     mouse_state_t *mouse = mouse_get_state();
@@ -204,6 +214,7 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info)
     while (1)
     {
         net_poll();
+        audio_update_stream();
 
         char key = get_last_key();
         if (key != 0)
@@ -228,6 +239,11 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info)
                 calc_handle_key(key);
                 render_desktop(mouse);
             }
+            else if (active_win == 8 && windows[8].is_visible)
+            {
+                player_handle_key(key);
+                render_desktop(mouse);
+            }
         }
 
         if (windows[5].is_visible)
@@ -237,6 +253,16 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info)
             {
                 last_snake_tick = timer_ticks;
                 snake_update();
+                render_desktop(mouse);
+            }
+        }
+
+        if (windows[8].is_visible && audio_get_state()->is_playing && !audio_get_state()->is_paused)
+        {
+            static unsigned int last_player_tick = 0;
+            if (timer_ticks - last_player_tick >= 5)
+            {
+                last_player_tick = timer_ticks;
                 render_desktop(mouse);
             }
         }
@@ -253,13 +279,13 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info)
             else if (start_menu.is_visible)
             {
                 int action = menu_handle_click(&start_menu, mouse->x, mouse->y);
-                if (action >= 1 && action <= 8)
+                if (action >= 1 && action <= 9)
                 {
                     windows[action - 1].is_visible = 1;
                     active_win = action - 1;
                     start_menu.is_visible = 0;
                 }
-                else if (action == 9)
+                else if (action == 10)
                 {
                     acpi_power_off();
                 }
@@ -323,6 +349,13 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info)
         if (mouse->left_button && active_win == 7 && windows[7].is_visible && !windows[7].is_dragging)
         {
             if (paint_handle_mouse(&windows[7], mouse->x, mouse->y, mouse->left_button))
+            {
+                render_desktop(mouse);
+            }
+        }
+        else if (mouse->left_button && active_win == 8 && windows[8].is_visible && !windows[8].is_dragging)
+        {
+            if (player_handle_click(&windows[8], mouse->x, mouse->y))
             {
                 render_desktop(mouse);
             }

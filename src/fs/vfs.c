@@ -67,6 +67,39 @@ int vfs_create_file_raw(const char *name, const char *content)
     return 0;
 }
 
+int vfs_create_file_binary(const char *name, const void *data, size_t length)
+{
+    if (file_count >= MAX_FILES)
+        return -1;
+
+    for (int i = 0; i < file_count; i++)
+    {
+        if (string_equals(file_system[i].name, name))
+        {
+            return -2;
+        }
+    }
+
+    vfs_node_t *node = &file_system[file_count];
+    string_copy(node->name, name);
+    node->flags = FS_FILE;
+    node->length = length;
+
+    node->data = (char *)kmalloc(length + 1);
+    if (node->data == NULL)
+        return -3;
+
+    const char *src = (const char *)data;
+    for (size_t i = 0; i < length; i++)
+    {
+        node->data[i] = src[i];
+    }
+    node->data[length] = '\0';
+
+    file_count++;
+    return 0;
+}
+
 void init_vfs(void)
 {
     file_count = 0;
@@ -82,6 +115,77 @@ void init_vfs(void)
     vfs_create_file_raw("version.info", "Lenovix OS Kernel v0.4 (Storage Update)");
     vfs_create_file_raw("demo.bas", "10 REM LOOP 1 TO 5\n20 PRINT \"=== BASIC LOOP ===\"\n30 LET A = 1\n40 PRINT \"NILAI: \"; A\n50 LET A = A + 1\n60 IF A <= 5 THEN 40\n70 PRINT \"SELESAI!\"\n80 END\n");
     vfs_create_file_raw("calc.bas", "10 REM INPUT DAN ARITMATIKA\n20 PRINT \"MASUKKAN ANGKA:\"\n30 INPUT A\n40 LET B = A * 2 + 10\n50 PRINT \"HASIL A*2+10 = \"; B\n60 END\n");
+
+    unsigned char wav_buf[512];
+    wav_buf[0] = 'R';
+    wav_buf[1] = 'I';
+    wav_buf[2] = 'F';
+    wav_buf[3] = 'F';
+    unsigned int rsize = 512 - 8;
+    wav_buf[4] = rsize & 0xFF;
+    wav_buf[5] = (rsize >> 8) & 0xFF;
+    wav_buf[6] = (rsize >> 16) & 0xFF;
+    wav_buf[7] = (rsize >> 24) & 0xFF;
+    wav_buf[8] = 'W';
+    wav_buf[9] = 'A';
+    wav_buf[10] = 'V';
+    wav_buf[11] = 'E';
+    wav_buf[12] = 'f';
+    wav_buf[13] = 'm';
+    wav_buf[14] = 't';
+    wav_buf[15] = ' ';
+    wav_buf[16] = 16;
+    wav_buf[17] = 0;
+    wav_buf[18] = 0;
+    wav_buf[19] = 0;
+    wav_buf[20] = 1;
+    wav_buf[21] = 0;
+    wav_buf[22] = 1;
+    wav_buf[23] = 0;
+    unsigned int srate = 11025;
+    wav_buf[24] = srate & 0xFF;
+    wav_buf[25] = (srate >> 8) & 0xFF;
+    wav_buf[26] = (srate >> 16) & 0xFF;
+    wav_buf[27] = (srate >> 24) & 0xFF;
+    wav_buf[28] = srate & 0xFF;
+    wav_buf[29] = (srate >> 8) & 0xFF;
+    wav_buf[30] = (srate >> 16) & 0xFF;
+    wav_buf[31] = (srate >> 24) & 0xFF;
+    wav_buf[32] = 1;
+    wav_buf[33] = 0;
+    wav_buf[34] = 8;
+    wav_buf[35] = 0;
+    wav_buf[36] = 'd';
+    wav_buf[37] = 'a';
+    wav_buf[38] = 't';
+    wav_buf[39] = 'a';
+    unsigned int dsize = 512 - 44;
+    wav_buf[40] = dsize & 0xFF;
+    wav_buf[41] = (dsize >> 8) & 0xFF;
+    wav_buf[42] = (dsize >> 16) & 0xFF;
+    wav_buf[43] = (dsize >> 24) & 0xFF;
+    for (int i = 0; i < 512 - 44; i++)
+    {
+        wav_buf[44 + i] = ((i / 16) % 2) ? 190 : 65;
+    }
+    vfs_create_file_binary("welcome.wav", wav_buf, 512);
+
+    unsigned char mp3_buf[834];
+    for (int f = 0; f < 2; f++)
+    {
+        int base = f * 417;
+        mp3_buf[base + 0] = 0xFF;
+        mp3_buf[base + 1] = 0xFB;
+        mp3_buf[base + 2] = 0x90;
+        mp3_buf[base + 3] = 0x64;
+        for (int p = 4; p < 417; p++)
+        {
+            mp3_buf[base + p] = (unsigned char)((p * 37 + f * 19) % 256);
+        }
+    }
+    vfs_create_file_binary("sample.mp3", mp3_buf, 834);
+
+    vfs_create_file_raw("retro.mod", "CHIPTUNE_TRACK_V1");
 }
 
 vfs_node_t *vfs_find_file(const char *name)

@@ -17,6 +17,7 @@ typedef struct vfs_node
 
 void init_vfs(void);
 int vfs_create_file_raw(const char *name, const char *content);
+int vfs_create_file_binary(const char *name, const void *data, size_t length);
 vfs_node_t *vfs_find_file(const char *name);
 void vfs_list_files(void);
 int vfs_get_count(void);

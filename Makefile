@@ -39,6 +39,8 @@ OBJS = $(BUILD_DIR)/boot.o \
        $(BUILD_DIR)/task.o \
        $(BUILD_DIR)/timer.o \
        $(BUILD_DIR)/basic.o \
+       $(BUILD_DIR)/audio_codec.o \
+       $(BUILD_DIR)/player.o \
        $(BUILD_DIR)/shell.o
 
 .PHONY: all clean run
@@ -173,6 +175,14 @@ $(BUILD_DIR)/timer.o: src/kernel/timer.c
 	$(CC) $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/basic.o: src/kernel/basic.c
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/audio_codec.o: src/kernel/audio_codec.c
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/player.o: src/drivers/player.c
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) $< -o $@
 

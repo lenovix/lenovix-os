@@ -18,6 +18,8 @@
 #include "tcp.h"
 #include "rtc.h"
 #include "basic.h"
+#include "audio_codec.h"
+#include "window.h"
 
 extern void cmd_taskdemo(void);
 extern unsigned int timer_ticks;
@@ -1939,7 +1941,7 @@ static const char *known_commands[] = {
     "cat", "touch", "write", "echo", "rm", "cp", "mv", "grep", "df", "hexdump", "free",
     "date", "uptime", "uname", "systeminfo", "diskinfo", "diskr", "diskw",
     "userdemo", "elfdemo", "lspci", "netinfo", "ifconfig", "ping", "dns", "curl",
-    "tarlist", "beep", "sbtest", "play", "ps", "kill", "taskdemo",
+    "tarlist", "beep", "sbtest", "play", "player", "ps", "kill", "taskdemo",
     "basic", "reboot", "shutdown", NULL};
 
 static void terminal_autocomplete(terminal_t *term)
@@ -2081,7 +2083,7 @@ static void terminal_execute_command(terminal_t *term)
         terminal_write_line(term, "      ps, kill <pid>, taskdemo");
         terminal_write_line(term, "      netinfo, ifconfig, ping [host] [count]");
         terminal_write_line(term, "      dns <domain>, curl <ip> [port] [path]");
-        terminal_write_line(term, "      sbtest, play <wav>, beep, basic [file]");
+        terminal_write_line(term, "      sbtest, play <file>, player, beep, basic");
         terminal_write_line(term, "      userdemo, clear, ver, reboot");
     }
     else if (str_equals(term->input_buf, "clear"))
@@ -2274,23 +2276,25 @@ static void terminal_execute_command(terminal_t *term)
         const char *fname = term->input_buf + 5;
         while (*fname == ' ')
             fname++;
-        vfs_node_t *f = vfs_find_file(fname);
-        if (f && f->data)
+        int r = audio_load_file(fname);
+        if (r == 0)
         {
-            int r = sb16_play_wav(f->data, f->length);
-            if (r == 0)
-            {
-                terminal_write_line(term, "Memainkan file WAV...");
-            }
-            else
-            {
-                terminal_write_line(term, "Format WAV tidak sesuai (8-bit PCM).");
-            }
+            audio_play();
+            terminal_write_line(term, "Memainkan audio (MP3/WAV/CHIP)...");
         }
-        else
+        else if (r == -1)
         {
             terminal_write_line(term, "File tidak ditemukan.");
         }
+        else
+        {
+            terminal_write_line(term, "Format audio tidak didukung.");
+        }
+    }
+    else if (str_equals(term->input_buf, "player"))
+    {
+        window_show_player();
+        terminal_write_line(term, "Membuka Media Player & Spectrum Visualizer...");
     }
     else if (str_equals(term->input_buf, "basic") || str_starts_with(term->input_buf, "basic "))
     {
