@@ -80,6 +80,8 @@ void init_vfs(void)
 
     vfs_create_file_raw("readme.txt", "Selamat Datang di Lenovix OS Filesystem v0.4!\nSistem ini menggunakan VFS sederhana.");
     vfs_create_file_raw("version.info", "Lenovix OS Kernel v0.4 (Storage Update)");
+    vfs_create_file_raw("demo.bas", "10 REM LOOP 1 TO 5\n20 PRINT \"=== BASIC LOOP ===\"\n30 LET A = 1\n40 PRINT \"NILAI: \"; A\n50 LET A = A + 1\n60 IF A <= 5 THEN 40\n70 PRINT \"SELESAI!\"\n80 END\n");
+    vfs_create_file_raw("calc.bas", "10 REM INPUT DAN ARITMATIKA\n20 PRINT \"MASUKKAN ANGKA:\"\n30 INPUT A\n40 LET B = A * 2 + 10\n50 PRINT \"HASIL A*2+10 = \"; B\n60 END\n");
 }
 
 vfs_node_t *vfs_find_file(const char *name)

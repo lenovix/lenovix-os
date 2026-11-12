@@ -17,6 +17,7 @@
 #include "task.h"
 #include "tcp.h"
 #include "rtc.h"
+#include "basic.h"
 
 extern void cmd_taskdemo(void);
 extern unsigned int timer_ticks;
@@ -1939,7 +1940,7 @@ static const char *known_commands[] = {
     "date", "uptime", "uname", "systeminfo", "diskinfo", "diskr", "diskw",
     "userdemo", "elfdemo", "lspci", "netinfo", "ifconfig", "ping", "dns", "curl",
     "tarlist", "beep", "sbtest", "play", "ps", "kill", "taskdemo",
-    "reboot", "shutdown", NULL};
+    "basic", "reboot", "shutdown", NULL};
 
 static void terminal_autocomplete(terminal_t *term)
 {
@@ -2008,16 +2009,28 @@ static void terminal_execute_command(terminal_t *term)
         return;
 
     char line[TERM_COLS];
-    line[0] = '>';
-    line[1] = ' ';
-    line[2] = '\0';
+    int offset = 2;
+    if (basic_is_active())
+    {
+        line[0] = 'B';
+        line[1] = '>';
+        line[2] = ' ';
+        line[3] = '\0';
+        offset = 3;
+    }
+    else
+    {
+        line[0] = '>';
+        line[1] = ' ';
+        line[2] = '\0';
+    }
 
     int i = 0;
-    for (i = 0; i < term->input_len && i < (TERM_COLS - 3); i++)
+    for (i = 0; i < term->input_len && i < (TERM_COLS - (offset + 1)); i++)
     {
-        line[i + 2] = term->input_buf[i];
+        line[i + offset] = term->input_buf[i];
     }
-    line[i + 2] = '\0';
+    line[i + offset] = '\0';
     terminal_write_line(term, line);
 
     if (term->input_len > 0)
@@ -2051,6 +2064,14 @@ static void terminal_execute_command(terminal_t *term)
     }
     term_hist_idx = -1;
 
+    if (basic_is_active())
+    {
+        basic_handle_input(term, term->input_buf);
+        term->input_len = 0;
+        term->input_buf[0] = '\0';
+        return;
+    }
+
     if (str_equals(term->input_buf, "help"))
     {
         terminal_write_line(term, "Cmds: ls, cat, touch, write, echo, rm, cp, mv");
@@ -2060,7 +2081,7 @@ static void terminal_execute_command(terminal_t *term)
         terminal_write_line(term, "      ps, kill <pid>, taskdemo");
         terminal_write_line(term, "      netinfo, ifconfig, ping [host] [count]");
         terminal_write_line(term, "      dns <domain>, curl <ip> [port] [path]");
-        terminal_write_line(term, "      sbtest, play <wav>, beep");
+        terminal_write_line(term, "      sbtest, play <wav>, beep, basic [file]");
         terminal_write_line(term, "      userdemo, clear, ver, reboot");
     }
     else if (str_equals(term->input_buf, "clear"))
@@ -2269,6 +2290,26 @@ static void terminal_execute_command(terminal_t *term)
         else
         {
             terminal_write_line(term, "File tidak ditemukan.");
+        }
+    }
+    else if (str_equals(term->input_buf, "basic") || str_starts_with(term->input_buf, "basic "))
+    {
+        const char *bargs = term->input_buf + 5;
+        while (*bargs == ' ')
+            bargs++;
+        if (str_starts_with(bargs, "run "))
+        {
+            bargs += 4;
+            while (*bargs == ' ')
+                bargs++;
+        }
+        if (*bargs == '\0')
+        {
+            basic_enter(term);
+        }
+        else
+        {
+            basic_run_file(term, bargs);
         }
     }
     else if (str_equals(term->input_buf, "reboot"))

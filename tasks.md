@@ -20,5 +20,4 @@ SOFTWARE:
     - Lenovix Excel (seperti microsoft Excel)
     - Lenovix Power Point (seperti microsoft Power Point)
     - Retro Game Console (Pong, Tetris, Space Invaders)
-    - BASIC Script Interpreter (LET, PRINT, INPUT, GOTO, IF) untuk nulis & run script di OS
     - Media Player & Spectrum Visualizer

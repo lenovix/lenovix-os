@@ -22,6 +22,7 @@
 #include "net.h"
 #include "tar.h"
 #include "tcp.h"
+#include "basic.h"
 
 extern void init_gdt(void);
 extern void init_idt(void);
@@ -154,6 +155,7 @@ void kernel_main(unsigned int magic, multiboot_info_t *mb_info)
     init_vmm(&local_mb_info);
     init_heap();
     init_vfs();
+    basic_init();
     tar_init_embedded();
     ata_init();
     pci_init();
